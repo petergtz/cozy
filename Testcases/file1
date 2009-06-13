@@ -1,0 +1,18 @@
+		if not hasattr(self,"based_on") and not hasattr(self,"datetime"):
+			raise Exception, "You must at least give either datetime or based_on as an argument."
+
+		self.readonly=True
+
+		self.based_ons = []
+		if hasattr(self,"based_on"):
+			cursor = self.db.cursor()
+			cursor.execute("select backup_id from Backups where datetime=?",(self.based_on,))
+			rows=cursor.fetchall()
+			if len(rows)==0:
+				raise Exception, "There is no backup with timestamp"+self.based_on
+			elif len(rows)>=2:
+				raise Exception, "More than one backup in DB with this timestamp. Corrupt database"
+			else: # only if there's exactly one backup with the given date and time to be based on, everythings fine
+				backup_id=rows[0][0]
+				cursor.execute("select * from Backups where based_on_id=?",(backup_id,))
+				if cursor.fetchone()== None:

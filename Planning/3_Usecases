@@ -1,0 +1,12 @@
+Full backup:
+mounten ohne dependency: mount timestamp
+
+Incr Backup:
+mounten mit dependency: mount timestamp date based_on date
+timestamp can exist in db already, but must have no backups based on this!
+if it has successors, mount must fail
+based_on must exits of course
+
+Restore:
+mount based_on date
+this is a readonly mount. no changes can be made ==> restore only

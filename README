@@ -1,0 +1,51 @@
+Configuration
+==============
+
+Until now the only way to configure cozy is to edit ~/.cozy manually. 
+Therefore copy the .cozy file from this directory into your home directory and adjust everything.
+
+Note: So far, only a single path can be set up for backup.
+
+For the specified target path make a file system in this directory:
+
+./cozy-mkfs.py /path/to/your/full/target/directory <a unique backup-id number>
+
+
+Usage:
+=======
+
+Whenever it's time to back up your data execute:
+
+./cozy-backup.py
+
+
+Whenever you need your backed up data open the source folder you specified in
+ ~/.cozy in Nautilus and hit the "Go To Restore Mode" button. Find the file 
+you're looking for and copy it to the desired location.
+
+Important: Don't forget to close the Restore mode, otherwise the temporarily mounted cozyfs will not be unmounted.
+
+Note: due to some restriction of plugins in Nautilus moving through the versions of folders
+in Nautilus, Nautilus' window will be closed and immediately reopened with the new version.
+Will be improved in the future.
+
+
+
+Things that happen internally
+==============================
+
+Backup
+-------
+
+Executing cozy-backup.py
+- will mount the filesystem from target dir into a temporary directory
+- it will then sync this temporary directory with the source
+- then it will unmount the filesystem
+- and finally make a snapshot
+
+Restore
+--------
+
+If you start restore mode in Nautilus
+- the target directory will be mounted into a temporary directory
+- nautilus will move into this directory
