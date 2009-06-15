@@ -79,9 +79,9 @@ class CozyFS(fuse.Fuse):
 #        self.db.execute(query)
 #        self.cached_file_tree = []
 
-    def __init_cached_inodes(self):
-    	for pair in self.db.execute('SELECT node_id, inode FROM Hardlinks'):
-    		self.cached_inodes[pair[0]] = pair[1]
+#    def __init_cached_inodes(self):
+ #   	for pair in self.db.execute('SELECT node_id, inode FROM Hardlinks'):
+  #  		self.cached_inodes[pair[0]] = pair[1]
 
     def main(self):
 
@@ -124,19 +124,18 @@ class CozyFS(fuse.Fuse):
             cursor = self.db.execute("select based_on_version from Versions where version=? and backup_id=?", (version, self.backup_id))
             version = cursor.fetchone()[0]
 
-#        self.__init_cached_file_tree()
-        self.__init_cached_inodes()
-
         log.debug("Backup_id: %s, Versions: %s", self.backup_id, self.versions)
 
         return fuse.Fuse.main(self)
 
-    def __backup_id_versions_where_statement(self, table_name):
-        return " (backup_id = " + self.backup_id + " AND (" + (table_name + ".version = ") + (" or " + table_name + ".version = ").join(map(str, self.versions)) + ") ) "
 
     def __del__(self):
         self.db.close()
         return fuse.Fuse.__del__(self)
+
+
+    def __backup_id_versions_where_statement(self, table_name):
+        return " (backup_id = " + self.backup_id + " AND (" + (table_name + ".version = ") + (" or " + table_name + ".version = ").join(map(str, self.versions)) + ") ) "
 
 
     def __get_node_id_from_path(self, path):
@@ -144,32 +143,20 @@ class CozyFS(fuse.Fuse):
         if path == '/':
             return 0
 
-
         if self.cached_node_ids.has_key(path):
             return self.cached_node_ids[path]
-        #FIXME/TODO: need a FIRST aggreate function when having multiple versions
-#        rows = cursor.fetchall()
 
         parent_node_id = 0
-        query = ''
         built_path = '/'
-        for nodename in path.split('/')[1:]:
-#            cursor.execute("select node_id from Nodes where " + self.__backup_id_versions_where_statement('Nodes') + " group by node_id having nodename=? and parent_node_id=? order by node_id, version desc", (nodename, parent_node_id))
-#            ret = cursor.fetchone()
-#            if ret == None:
-#                self.cached_node_ids[path] = None
-#                return None
-            rel_node_id = self.__get_node_id_from_path(built_path)
-            if rel_node_id is not None:
-            	parent_node_id = rel_node_id
+        for nodename in path.split('/')[1:-1]:
+            if self.cached_node_ids.has_key(os.path.join(built_path, nodename)):
+                parent_node_id = self.cached_node_ids[os.path.join(built_path, nodename)]
             else:
                 parent_node_id = '(' + "select node_id from Nodes where " + self.__backup_id_versions_where_statement('Nodes') + " group by node_id having nodename='" + nodename + "' and parent_node_id=" + str(parent_node_id) + " order by node_id, version desc" + ')'
-            if built_path == '/':
-                built_path = built_path + nodename
-            else:
-                built_path = built_path + '/' + nodename
 
+            built_path = os.path.join(built_path, nodename)
 
+        query = "select node_id from Nodes where " + self.__backup_id_versions_where_statement('Nodes') + " group by node_id having nodename='" + path.split('/')[-1] + "' and parent_node_id=" + str(parent_node_id) + " order by node_id, version desc"
         result = self.db.execute(query).fetchone()
         if result is None:
             self.cached_node_ids[path] = None
@@ -178,11 +165,19 @@ class CozyFS(fuse.Fuse):
 #        print query, "RESULTS:", result[0]
         return result[0]
 
+    def __get_inode(self, node_id):
+        if self.cached_inodes.has_key(node_id):
+            return self.cached_inodes[node_id]
+
+        inode = self.db.execute('SELECT inode FROM Hardlinks WHERE node_id=?', (node_id,)).fetchone()[0]
+        self.cached_inodes[node_id] = inode
+        return inode
+
     def __get_attributes_from_node_id(self, node_id):
     	if self.cached_attributes.has_key(node_id):
     		return self.cached_attributes[node_id]
         row = dict()
-        row['inode'] = self.cached_inodes[node_id]
+        row['inode'] = self.__get_inode(node_id)
         attributes = ['size', 'atime', 'mtime', 'ctime', 'mode', 'uid', 'gid']
         for attribute in attributes:
             log.debug('select ' + attribute + '  from ' + attribute + ' where inode=? and ' +
@@ -290,6 +285,14 @@ class CozyFS(fuse.Fuse):
         self.db.execute('insert into ctime (backup_id,version,inode, ctime) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, ctime))
         self.db.execute('insert into mtime (backup_id,version,inode, mtime) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, ctime))
         self.db.execute('insert into size (backup_id,version,inode, size) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, 0))
+        self.cached_attributes[new_inode] = {'type': FILE,
+                                             'uid': self.GetContext()['uid'],
+                                             'gid': self.GetContext()['gid'],
+                                             'mode': mode,
+                                             'atime': ctime,
+                                             'ctime': ctime,
+                                             'mtime': ctime,
+                                             'size': 0 }
 
         query = 'insert into Hardlinks (node_id, inode) values (null,?)'
         log.debug(query2log(query), new_inode)
@@ -331,6 +334,14 @@ class CozyFS(fuse.Fuse):
         self.db.execute('insert into ctime (backup_id,version,inode, ctime) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, ctime))
         self.db.execute('insert into mtime (backup_id,version,inode, mtime) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, ctime))
         self.db.execute('insert into size (backup_id,version,inode, size) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, 0))
+        self.cached_attributes[new_inode] = {'type': DIRECTORY,
+                                             'uid': self.GetContext()['uid'],
+                                             'gid': self.GetContext()['gid'],
+                                             'mode': mode,
+                                             'atime': ctime,
+                                             'ctime': ctime,
+                                             'mtime': ctime,
+                                             'size': 0 }
 
         cursor = self.db.execute('insert into Hardlinks (node_id, inode) values (null,?)', (new_inode,))
         self.cached_inodes[cursor.lastrowid] = new_inode
@@ -371,11 +382,12 @@ class CozyFS(fuse.Fuse):
 
         pe = target_path.rsplit('/', 1)
         cursor = self.db.execute("insert into Hardlinks (node_id,inode) values (null,?)", (self.__get_inode_from_path(src_path),))
-        self.cached_inodes[cursor.lastrowid] = new_inode
+        new_node_id = cursor.lastrowid
+        self.cached_inodes[new_node_id] = new_inode
+        self.cached_node_ids[pe[1]] = new_node_id
         self.db.execute("insert into Nodes (backup_id, version, node_id, parent_node_id, nodename) values (?,?,?,?,?)", \
-                        (self.backup_id, self.versions[0], cursor.lastrowid, self.__get_node_id_from_path(pe[0]), pe[1]))
+                        (self.backup_id, self.versions[0], new_node_id, self.__get_node_id_from_path(pe[0]), pe[1]))
         self.my_commit()
-        #TODO: insert cached handling
 
 
     def symlink(self, src_path, target_path):
@@ -396,11 +408,20 @@ class CozyFS(fuse.Fuse):
         self.db.execute('insert into ctime (backup_id,version,inode, ctime) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, ctime))
         self.db.execute('insert into mtime (backup_id,version,inode, mtime) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, ctime))
         self.db.execute('insert into size (backup_id,version,inode, size) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, 0))
+        self.cached_attributes[new_inode] = {'type': SOFT_LINK,
+                                             'uid': self.GetContext()['uid'],
+                                             'gid': self.GetContext()['gid'],
+                                             'mode': stat.S_IFLNK,
+                                             'atime': ctime,
+                                             'ctime': ctime,
+                                             'mtime': ctime,
+                                             'size': 0 }
 
         query = 'insert into Hardlinks (node_id, inode) values (null,?)'
         log.debug(query2log(query), new_inode)
         cursor = self.db.execute(query, (new_inode,))
         self.cached_inodes[cursor.lastrowid] = new_inode
+        self.cached_node_ids[pe[1]] = cursor.lastrowid
 
         query = 'insert into Nodes (backup_id,version,node_id,nodename,parent_node_id) values (?,?,?,?,?)'
         log.debug(query2log(query), self.backup_id, self.versions[0], cursor.lastrowid, pe[1], self.__get_node_id_from_path(pe[0]))
@@ -442,33 +463,33 @@ class CozyFS(fuse.Fuse):
             return - errno.EROFS
 
         node_id = self.__get_node_id_from_path(path)
+        inode = self.__get_inode(node_id)
+
         if self.__has_base_nodes(node_id):
             if self.__has_current_node(node_id):
                 self.db.execute("update Nodes set nodename = null where node_id = ? and backup_id = ? and version = ?", (node_id, self.backup_id, self.versions[0]))
             else: # TODO: might be VERY IMPORTANT TO ALSO INSERT PARENT_NODE_ID! (dont know...)
                 self.db.execute("insert into Nodes (backup_id, version, node_id) values (?,?,?) ", (self.backup_id, self.versions[0], node_id))
         else:
-            node_id = self.__get_node_id_from_path(path)
+#            node_id = self.__get_node_id_from_path(path)
             data_path = self.__get_data_path_from_path(path)
             self.db.execute("delete from Nodes where backup_id=? and version=? and node_id=?", (self.backup_id, self.versions[0], node_id))
             cursor = self.db.execute("select count(node_id) from Nodes where node_id=?", (node_id,))
             row = cursor.fetchone()
             if row[0] == 0:
-                datarow = self.__get_attributes_from_node_id(node_id)
                 self.db.execute("delete from Hardlinks where node_id=?", (node_id,))
-                del self.cached_inodes[node_id]
 
-                cursor = self.db.execute("select count(inode) from Hardlinks where inode=?", (datarow["inode"],))
+                cursor = self.db.execute("select count(inode) from Hardlinks where inode=?", (inode,))
                 row = cursor.fetchone()
                 if row[0] == 0:
-                    self.db.execute("delete from DataPaths where inode=?", (datarow["inode"],))
-                    self.db.execute("delete from size where inode=?", (datarow["inode"],))
-                    self.db.execute("delete from mode where inode=?", (datarow["inode"],))
-                    self.db.execute("delete from atime where inode=?", (datarow["inode"],))
-                    self.db.execute("delete from mtime where inode=?", (datarow["inode"],))
-                    self.db.execute("delete from ctime where inode=?", (datarow["inode"],))
-                    self.db.execute("delete from gid where inode=?", (datarow["inode"],))
-                    self.db.execute("delete from uid where inode=?", (datarow["inode"],))
+                    self.db.execute("delete from DataPaths where inode=?", (inode,))
+                    self.db.execute("delete from size where inode=?", (inode,))
+                    self.db.execute("delete from mode where inode=?", (inode,))
+                    self.db.execute("delete from atime where inode=?", (inode,))
+                    self.db.execute("delete from mtime where inode=?", (inode,))
+                    self.db.execute("delete from ctime where inode=?", (inode,))
+                    self.db.execute("delete from gid where inode=?", (inode,))
+                    self.db.execute("delete from uid where inode=?", (inode,))
                     if datarow["type"] == FILE:
                         cursor = self.db.execute("select count(inode) from DataPaths where data_path=?", (data_path,))
                         row = cursor.fetchone()
@@ -477,6 +498,8 @@ class CozyFS(fuse.Fuse):
                             # Todo: check if remove successful. if not, rollback and return "-1"!
         self.my_commit()
         del self.cached_node_ids[path]
+        del self.cached_attributes[inode]
+        del self.cached_inodes[node_id]
         return 0
 
     def rmdir(self, path): # TODO: check if this is funciton is allowd to delete all sub-"nodes"
@@ -492,7 +515,8 @@ class CozyFS(fuse.Fuse):
         return self.unlink(path)
 
     def __get_data_path_from_path(self, path):
-        cursor = self.db.execute("select DataPaths.data_path from Hardlinks, DataPaths where Hardlinks.node_id=? and Hardlinks.inode=DataPaths.inode and " + self.__backup_id_versions_where_statement('DataPaths') + ' order by DataPaths.version desc', (self.__get_node_id_from_path(path),))
+        cursor = self.db.execute("select data_path from DataPaths where inode=? and " + self.__backup_id_versions_where_statement('DataPaths') + ' order by version desc', (self.__get_inode_from_path(path),))
+#        cursor = self.db.execute("select DataPaths.data_path from Hardlinks, DataPaths where Hardlinks.node_id=? and Hardlinks.inode=DataPaths.inode and " + self.__backup_id_versions_where_statement('DataPaths') + ' order by DataPaths.version desc', (self.__get_node_id_from_path(path),))
         row = cursor.fetchone()
         if row == None:
             raise Exception, "Path does not exist in Database"
@@ -592,20 +616,20 @@ class CozyFS(fuse.Fuse):
 
 
     def __get_inode_from_path(self, path):
-    	return self.cached_inodes[self.__get_node_id_from_path(path)]
+    	return self.__get_inode(self.__get_node_id_from_path(path))
 
     def __update_attributes(self, inode, attributes):
-    	if self.cached_attributes.has_key(inode):
-    		del self.cached_attributes[inode] # TODO: update this directly!
-
         for (attribute, val) in attributes.iteritems():
             if self.__has_current_inode(inode, attribute):
                 query = 'update ' + attribute + ' set ' + attribute + ' = ? where inode=? and backup_id=? and version=?'
             else:
                 query = 'insert into ' + attribute + ' (' + attribute + ',inode,backup_id,version) values (?,?,?,?)'
+
+            self.cached_attributes[inode][attribute] = val
+
             log.debug(query2log(query), val, inode, self.backup_id, self.versions[0])
             self.db.execute(query, (val, inode, self.backup_id, self.versions[0]))
-            # CHECKME: why was this not here before? Is it sometimes not needed???
+
             self.my_commit()
 
     def __update_data_path(self, inode, data_path, type):
@@ -613,6 +637,8 @@ class CozyFS(fuse.Fuse):
             query = 'update DataPaths set data_path = ?, type = ? where inode=? and backup_id=? and version=?'
         else:
             query = 'insert into Datapaths (data_path,type,inode,backup_id,version) values (?,?,?,?,?)'
+
+        self.cached_attributes[inode]['type'] = type
         log.debug(query2log(query), data_path, type, inode, self.backup_id, self.versions[0])
         self.db.execute(query, (data_path, type, inode, self.backup_id, self.versions[0]))
         # CHECKME: why was this not here before? Is it sometimes not needed???
