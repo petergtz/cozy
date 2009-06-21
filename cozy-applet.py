@@ -23,6 +23,12 @@ import sys
 import os
 import time
 
+ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
+COZY_BACKUP_PATH = os.path.join(ROOT_DIR, 'cozy-backup.py')
+COZY_MANAGER_PATH = os.path.join(ROOT_DIR, 'cozy-manager.py')
+COZY_CONFIGDLG_PATH = os.path.join(ROOT_DIR, 'configdialog.py')
+COZY_ICON_PATH = os.path.join(ROOT_DIR, 'Icon/cozy.svg')
+
 class CozyIcon(gtk.StatusIcon):
     '''
     classdocs
@@ -34,7 +40,7 @@ class CozyIcon(gtk.StatusIcon):
         result = dlg.run()
         dlg.destroy()
         if result == gtk.RESPONSE_YES:
-            process = subprocess.Popen(['./cozy-backup.py', '-f'])
+            process = subprocess.Popen([COZY_BACKUP_PATH, '-f'])
 
     def on_popup_menu(self, button, activate_time):
         menu = gtk.Menu()
@@ -58,7 +64,7 @@ class CozyIcon(gtk.StatusIcon):
 
         self.connect_object("activate", CozyIcon.on_activate, self)
         self.connect_object("popup-menu", CozyIcon.on_popup_menu, self)
-        self.set_from_file("cozy.svg")
+        self.set_from_file(COZY_ICON_PATH)
 
         session_bus = dbus.SessionBus()
         session_bus.add_signal_receiver(self.make_visible, 'removeable_volume_connected_signal', 'org.freedesktop.Cozy.Manager', 'org.freedesktop.Cozy', '/org/freedesktop/Cozy/Manager')
@@ -76,7 +82,7 @@ class CozyIcon(gtk.StatusIcon):
         #                abort
         #        
 
-        os.system('./cozy-manager.py start')
+        os.system(COZY_MANAGER_PATH + ' start')
         time.sleep(2)
         try:
             manager = session_bus.get_object('org.freedesktop.Cozy', '/org/freedesktop/Cozy/Manager')
@@ -128,7 +134,7 @@ class CozyIcon(gtk.StatusIcon):
 #        mediator = None
 #        mediator = cozy.configdialog.ConfigMediator(self)
 #        mediator.show_all()
-        process = subprocess.Popen('./configdialog.py')
+        process = subprocess.Popen(COZY_CONFIGDLG_PATH)
 
     def on_exit(self, widget):
         mainloop.quit()
@@ -137,8 +143,8 @@ if __name__ == '__main__':
 
     DBusGMainLoop(set_as_default=True)
 
-    builder = gtk.Builder()
-    builder.add_from_file("configuration_dialog.xml")
+#    builder = gtk.Builder()
+#    builder.add_from_file("configuration_dialog.xml")
 #    cozy.configdialog.builder = builder
 
     icon = CozyIcon()

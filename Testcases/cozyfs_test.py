@@ -8,12 +8,13 @@ import subprocess
 import sqlite3
 import stat
 
-ROOT_DIR = '/home/peter/Projects/Cozy/'
+TC_DIR = os.path.abspath(os.path.dirname(__file__))
+ROOT_DIR = os.path.join(TC_DIR, '..')
 
 
-COZYFS_PATH = ROOT_DIR + 'cozyfs.py'
-MKFS_PATH = ROOT_DIR + 'cozy-mkfs.py'
-SNAPSHOT_PATH = ROOT_DIR + 'snapshot.py'
+COZYFS_PATH = os.path.join(ROOT_DIR, 'cozyfs.py')
+MKFS_PATH = os.path.join(ROOT_DIR, 'cozy-mkfs.py')
+SNAPSHOT_PATH = os.path.join(ROOT_DIR, 'snapshot.py')
 DBFILE = "fsdb"
 TARGET_DIR = '/home/peter/MyBackup'
 
@@ -255,11 +256,11 @@ def clean_db():
 
 
 def clean_file_pool():
-    os.system('rm -rf ' + TARGET_DIR + '/FilePool/*')
+    os.system('rm -rf ' + os.path.join(TARGET_DIR, 'FilePool/*'))
 
 
 def clean_tmp_dir():
-    os.system('rm -rf ' + TARGET_DIR + '/Tmp/*')
+    os.system('rm -rf ' + os.path.join(TARGET_DIR, 'Tmp/*'))
 
 
 def umount(mountpath):
@@ -287,7 +288,7 @@ try:
     mount(mountpath, target_dir=TARGET_DIR, backup_id=666, version=version1)
     neg_mkdir('folder1')
     move('folder1', 'folder1_renamed')
-    copy(ROOT_DIR + 'Testcases/file1', 'file1')
+    copy(os.path.join(TC_DIR, 'file1'), 'file1')
     move('file1', 'folder1_renamed/file1')
     umount(mountpath)
 
@@ -295,24 +296,24 @@ try:
 
     mount(mountpath, target_dir=TARGET_DIR, backup_id=666, version=version2)
     mkdirs('folder2/folder3')
-    copy(ROOT_DIR + 'Testcases/file1', 'file2')
-    copy(ROOT_DIR + 'Testcases/file2', './folder1_renamed/file1')
-    copy(ROOT_DIR + 'Testcases/file1', 'overwriter')
+    copy(os.path.join(TC_DIR, 'file1'), 'file2')
+    copy(os.path.join(TC_DIR, 'file2'), './folder1_renamed/file1')
+    copy(os.path.join(TC_DIR, 'file1'), 'overwriter')
     umount(mountpath)
 
     version3 = snapshot(TARGET_DIR, '666', version2)
 
     mount(mountpath, target_dir=TARGET_DIR, backup_id=666, version=version3)
-    copy(ROOT_DIR + 'Testcases/file1', 'overwriter')
+    copy(os.path.join(TC_DIR, 'file1'), 'overwriter')
 #    raw_input()
     mkdir('folder4')
     mkdir('folder5')
     rmtree('folder5')
     rm('folder1_renamed/file1')
-    copy(ROOT_DIR + 'Testcases/image1.jpg', 'image.jpg')
+    copy(os.path.join(TC_DIR, 'image1.jpg'), 'image.jpg')
     hardlink('image.jpg', 'folder4/hardlink_to_image.jpg')
     rm('image.jpg')
-    compare_file_content(ROOT_DIR + 'Testcases/image1.jpg', 'folder4/hardlink_to_image.jpg')
+    compare_file_content(os.path.join(TC_DIR, 'image1.jpg'), 'folder4/hardlink_to_image.jpg')
     softlink('folder4/hardlink_to_image.jpg', 'softlink_to_image.jpg')
     umount(mountpath)
 

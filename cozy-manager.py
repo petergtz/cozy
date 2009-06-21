@@ -331,7 +331,7 @@ class ManagerDaemon(daemon.Daemon):
 
 
 if __name__ == '__main__':
-    daemon = ManagerDaemon('/tmp/manager-daemon.pid')
+    daemon = ManagerDaemon('/tmp/cozy-manager-daemon.pid')
     if len(sys.argv) == 2:
         if 'start' == sys.argv[1]:
             daemon.start()

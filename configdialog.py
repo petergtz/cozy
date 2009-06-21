@@ -14,6 +14,12 @@ import time
 
 import re
 
+ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
+COZY_MKFS_PATH = os.path.join(ROOT_DIR, 'cozy-mkfs.py')
+COZY_MANAGER_PATH = os.path.join(ROOT_DIR, 'cozy-manager.py')
+COZY_APPLET_PATH = os.path.join(ROOT_DIR, 'cozy-applet.py')
+BUILDER_XML_PATH = os.path.join(ROOT_DIR, 'configuration_dialog.xml')
+
 class ConfigMediator:
     def __init__(self, parent=None):
 
@@ -128,7 +134,7 @@ class ConfigMediator:
     def delete_event(self, widget, event, data=None):
         if self.config.changed():
             self.config.write()
-            subprocess.call(['./cozy-mkfs.py', self.config.get_full_target_path(), str(self.config.get_backup_id())])
+            subprocess.call([COZY_MKFS_PATH, self.config.get_full_target_path(), str(self.config.get_backup_id())])
             if self.permanent_radio.get_active():
                 self.add_crontab_entry()
                 subprocess.call(['killall', 'cozy-applet.py'])
@@ -136,7 +142,7 @@ class ConfigMediator:
                 self.remove_crontab_entry()
                 a = os.system("ps -ef | grep -v grep | grep cozy-applet.py")
                 if a != 0:
-                    subprocess.Popen(['./cozy-applet.py'])
+                    subprocess.Popen([COZY_APPLET_PATH])
             self.restart_manager()
 #        dialog = builder.get_object("confirmation_dialog")
 #        result = dialog.run()
@@ -153,7 +159,7 @@ class ConfigMediator:
 
     def restart_manager(self):
         print 'Restarting cozy-manager.py'
-        os.system('./cozy-manager.py restart')
+        os.system(COZY_MANAGER_PATH + ' restart')
         time.sleep(2)
 
 #        if process.poll() is not None:
@@ -190,7 +196,7 @@ class ConfigMediator:
 
 if __name__ == "__main__":
     builder = gtk.Builder()
-    builder.add_from_file("configuration_dialog.xml")
+    builder.add_from_file(BUILDER_XML_PATH)
 
     mediator = ConfigMediator()
     mediator.show_all()
