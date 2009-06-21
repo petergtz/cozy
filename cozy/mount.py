@@ -10,7 +10,7 @@ def mount(target_path, mountpoint, backup_id, version=None):
 	if not os.path.exists(mountpoint):
 		os.makedirs(mountpoint)
 
-	cmdline = ['./cozyfs.py', mountpoint, '-o', 'target_dir=' + target_path + ',backup_id=' + str(backup_id), '-f']
+	cmdline = ['cozyfs.py', mountpoint, '-o', 'target_dir=' + target_path + ',backup_id=' + str(backup_id), '-f']
 
 	if version is not None:
 		cmdline[-2] = cmdline[-2] + ',version=' + str(version)

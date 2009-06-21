@@ -10,19 +10,67 @@ import snapshot
 import cozy.configutils
 from cozy.mount import mount, umount
 
+import errno
+
+def copyfile(src, dst):
+    src_stat = os.stat(src)
+    if os.path.exists(dst):
+        src_stat = os.stat(src)
+        dst_stat = os.stat(dst)
+        if src_stat.st_size == dst_stat.st_size and \
+            src_stat.st_mode == dst_stat.st_mode and \
+            src_stat.st_gid == dst_stat.st_gid and \
+            src_stat.st_uid == dst_stat.st_uid and \
+            src_stat.st_atime == dst_stat.st_atime and \
+            src_stat.st_mtime == dst_stat.st_mtime:
+    # TODO: maybe add more stats
+            return
+    print 'Copy file to target:', dst
+    shutil.copy2(src, dst)
+    os.chown(dst, src_stat.st_uid, src_stat.st_gid)
+    os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
+
+def copysymlink(src, dst):
+    linkto = os.readlink(src)
+    if os.path.lexists(dst):
+        if os.path.islink(dst) and os.readlink(dst) == linkto:
+            return
+        else:
+            os.remove(dst)
+    print 'Copy symlink:', dst, '->', linkto
+    os.symlink(linkto, dst)
+
+def copydir(src, dst):
+    src_stat = os.stat(src)
+    if os.path.exists(dst):
+        dst_stat = os.stat(dst)
+        if src_stat.st_mode == dst_stat.st_mode and \
+            src_stat.st_gid == dst_stat.st_gid and \
+            src_stat.st_uid == dst_stat.st_uid and \
+            src_stat.st_mtime == dst_stat.st_mtime:
+#            src_stat.st_ctime == dst_stat.st_ctime and \
+            pass
+        else:
+            os.chmod(dst, src_stat.st_mode)
+            os.chown(dst, src_stat.st_uid, src_stat.st_gid)
+            os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
+        return
+
+    print 'Copy dir to target:', dst
+    os.mkdir(dst)
+    os.chmod(dst, src_stat.st_mode)
+    os.chown(dst, src_stat.st_uid, src_stat.st_gid)
+    os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
 
 def sync(source, target):
 
-# TODO: only copy files that changed to avoid unnecessary copying.    
     for dirpath, dirnames, filenames in os.walk(source):
-
-#TODO: treat symbbolic links correctly
 
         rel_path = dirpath.replace(source, '').lstrip('/')
 
         for target_dir_file in os.listdir(os.path.join(target, rel_path)):
             abs_target_path = os.path.join(target, rel_path, target_dir_file)
-            if os.path.isfile(abs_target_path) and \
+            if (os.path.isfile(abs_target_path) or (os.path.islink(abs_target_path))) and \
                 target_dir_file not in filenames:
 
                 print 'Remove file in target:', abs_target_path
@@ -34,19 +82,18 @@ def sync(source, target):
                 print 'Remove dir in target:', abs_target_path
                 shutil.rmtree(abs_target_path)
 
-# TODO: check which copy function must be used to also copy attributes. Also check mkdir
         for dirname in dirnames:
-            try:
-                print 'Copy dir to target:', os.path.join(target, rel_path, dirname)
-                os.mkdir(os.path.join(target, rel_path, dirname))
-            except OSError:
-                pass
+            src = os.path.join(dirpath, dirname)
+            dst = os.path.join(target, rel_path, dirname)
+            copydir(src, dst)
+
         for filename in filenames:
-            if os.path.islink(os.path.join(dirpath, filename)):
-                print 'Skipping link'
-                continue
-            print 'Copy file to target:', os.path.join(target, rel_path, filename)
-            shutil.copy(os.path.join(dirpath, filename), os.path.join(target, rel_path, filename))
+            src = os.path.join(dirpath, filename)
+            dst = os.path.join(target, rel_path, filename)
+            if os.path.islink(src):
+                copysymlink(src, dst)
+            else:
+                copyfile(src, dst)
 
 
 if __name__ == '__main__':
@@ -85,4 +132,3 @@ if __name__ == '__main__':
         umount(mountpoint)
 
         snapshot.snapshot(target_path, backup_id)
-
