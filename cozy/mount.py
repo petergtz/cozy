@@ -15,7 +15,7 @@ def mount(target_path, mountpoint, backup_id, version=None):
 	if version is not None:
 		cmdline[-2] = cmdline[-2] + ',version=' + str(version)
 
-	print '### MOUNTING: ' + ' '.join(cmdline)
+	print 'mounting: ' + ' '.join(cmdline)
 	process = subprocess.Popen(cmdline)
 	time.sleep(2)
 	if process.poll() != None:
@@ -26,7 +26,7 @@ def mount(target_path, mountpoint, backup_id, version=None):
 
 
 def umount(mountpoint):
-	print '### UNMOUNTING'
+	print 'unmounting'
 	os.system('fusermount -z -u ' + mountpoint)
 	os.rmdir(mountpoint)
 

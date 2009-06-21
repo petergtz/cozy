@@ -18,7 +18,7 @@ class Configuration:
         result = self.parser.read(os.path.expanduser('~/.cozy'))
         if len(result) == 0:
             self.parser.add_section('globals')
-            self.parser.set('globals', 'backup_id', str(random.randint(1, 100000)))
+            self.set_backup_id(random.randint(1, 100000))
 
         self.backup_enabled_changed = False
         self.source_path_changed = False
@@ -161,7 +161,7 @@ class Configuration:
             raise Configuration.ConfigFileIncompleteError("Configuration file incomplete. Error: " + str(e))
 
     def set_backup_id(self, backup_id):
-        self.parser.setint('globals', 'backup_id', backup_id)
+        self.parser.set('globals', 'backup_id', str(backup_id))
 
     def changed(self):
         return self.backup_enabled_changed or self.source_path_changed or self.target_path_changed or self.removeable_target_volume_changed
