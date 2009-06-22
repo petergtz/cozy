@@ -15,16 +15,16 @@ import sqlite3
 
 import dbus
 import dbus.service
-from time import strptime, mktime, strftime, gmtime
+from time import strptime, mktime, strftime, localtime
 
 import daemon
 
 
 def epoche2date(epoche):
-    return strftime('%Y-%m-%d_%H-%M-%S', gmtime(epoche))
+    return strftime('%Y-%m-%d_%H-%M-%S', localtime(epoche))
 
 def date2epoche(date):
-    return str(mktime(strptime(date, '%Y-%m-%d_%H-%M-%S')))
+    return int(mktime(strptime(date, '%Y-%m-%d_%H-%M-%S')))
 
 
 DBFILE = 'fsdb'
@@ -331,7 +331,7 @@ class ManagerDaemon(daemon.Daemon):
 
 
 if __name__ == '__main__':
-    daemon = ManagerDaemon('/tmp/cozy-manager-daemon.pid')
+    daemon = ManagerDaemon('/tmp/cozy-manager.pid', stdout='/tmp/cozy-manager-stdout', stderr='/tmp/cozy-manager-stderr')
     if len(sys.argv) == 2:
         if 'start' == sys.argv[1]:
             daemon.start()
