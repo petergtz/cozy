@@ -71,10 +71,22 @@ def create_data(path):
 
 
 def make_change1(path):
-    pass
+    files = os.listdir(path)
+    for file in files[1:3]:
+        if os.path.isfile(os.path.join(path, file)):
+            print 'removing file', os.path.join(path, file)
+            os.remove(os.path.join(path, file))
+        elif os.path.isdir(os.path.join(path, file)):
+            print 'removing dir', os.path.join(path, file)
+            shutil.rmtree(os.path.join(path, file))
 
 def make_change2(path):
-    pass
+    files = os.listdir(path)
+    for file in files:
+        if os.path.isfile(os.path.join(path, file)):
+            os.remove(os.path.join(path, file))
+        elif os.path.isdir(os.path.join(path, file)):
+            shutil.rmtree(os.path.join(path, file))
 
 class DataHandler:
     def __init__(self, data_dir):
@@ -84,23 +96,61 @@ class DataHandler:
 
     def create_data(self):
         self.change_counter = 0
+        print 'creating data'
         create_data(self.data_dir)
         create_data(self.data_dir + str(self.change_counter))
 
     def change_data(self):
         shutil.copytree(self.data_dir + str(self.change_counter), self.data_dir + str(self.change_counter + 1), True)
         self.change_counter += 1
+        print 'making change number', self.change_counter
         self.changes[self.change_counter - 1](self.data_dir)
         self.changes[self.change_counter - 1](self.data_dir + str(self.change_counter))
 
     def undo_change_data(self):
         if self.change_counter == 0:
-            sys.exit('FAILED: change counter already 0')
+            sys.exit('### FAILED: change counter already 0')
         self.change_counter -= 1
 
     def compare_data_with(self, path2):
         path1 = self.data_dir + str(self.change_counter)
-#TODO: implemenent this
+
+        for dirpath, dirnames, filenames in os.walk(path1):
+
+#            for dirname in dirnames:
+#                if not os.path.lexists(dirname)
+#                src = os.path.join(dirpath, dirname)
+#                dst = os.path.join(target, rel_path, dirname)
+#                copydir(src, dst)
+#    
+            for filename in filenames:
+                print 'Comparing', os.path.join(dirpath, filename), '***', os.path.normpath(os.path.join(dirpath.replace(path1, path2), filename))
+                abs_file_path1 = os.path.join(dirpath, filename)
+                abs_file_path2 = os.path.normpath(os.path.join(dirpath.replace(path1, path2), filename))
+                if not os.path.lexists(abs_file_path2):
+                    sys.exit('### FAILED file ' + abs_file_path2 + ' is missing')
+                stat1 = os.lstat(abs_file_path1)
+                stat2 = os.lstat(abs_file_path2)
+                if not stat1.st_uid == stat2.st_uid:
+                    sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same uid')
+                if not stat1.st_mode == stat2.st_mode:
+                    sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same mode')
+                if not stat1.st_gid == stat2.st_gid:
+                    sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same gid')
+                if not stat1.st_size == stat2.st_size:
+                    sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same size')
+                if not stat1.st_mtime == stat2.st_mtime:
+                    sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same mtime')
+#                if not stat1.st_ctime == stat2.st_ctime:
+ #                   sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same ctime')
+#                if not stat1.st_atime == stat2.st_atime:
+ #                   sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same atime')
+#                src = os.path.join(dirpath, filename)
+#                dst = os.path.join(target, rel_path, filename)
+#                if os.path.islink(src):
+#                    copysymlink(src, dst)
+#                else:
+#                    copyfile(src, dst)
 
 
     def cleanup(self):
@@ -157,7 +207,7 @@ try:
         cozy_backup.backup_data()
         data_handler.change_data()
 
-    prev_version_path = DATA
+    prev_version_path = cozy_backup.get_prev_version_path(DATA)
     for change_number in range(len(data_handler.changes)):
         data_handler.undo_change_data()
         prev_version_path = cozy_backup.get_prev_version_path(prev_version_path)
