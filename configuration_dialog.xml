@@ -6,7 +6,7 @@
     <property name="border_width">14</property>
     <property name="title" translatable="yes">Backup Configuration</property>
     <property name="window_position">center</property>
-    <property name="icon">cozy.svg</property>
+    <property name="icon">Icon/cozy.svg</property>
     <signal name="destroy" handler="destroy"/>
     <signal name="delete_event" handler="delete_event"/>
     <child>
