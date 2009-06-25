@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import cozy.configutils
 import dbus
+from time import sleep
 
 TC_DIR = os.path.abspath(os.path.dirname(__file__))
 ROOT_DIR = os.path.join(TC_DIR, '..')
@@ -70,9 +71,9 @@ def create_data(path):
     shutil.copytree(TEST_DATA, path, True)
 
 
-def make_change1(path):
-    files = os.listdir(path)
-    for file in files[1:3]:
+def delete_two_files(path):
+    files = ['extensions', 'GlTransition.csharp']
+    for file in files:
         if os.path.isfile(os.path.join(path, file)):
             print 'removing file', os.path.join(path, file)
             os.remove(os.path.join(path, file))
@@ -80,10 +81,18 @@ def make_change1(path):
             print 'removing dir', os.path.join(path, file)
             shutil.rmtree(os.path.join(path, file))
 
-def make_change2(path):
+def add_symlinks_and_copies(path):
+    os.symlink('TextureDisplay-bessere-loesung.csharp', os.path.join(path, 'shorty'))
+    os.utime(os.path.join(path, 'shorty'), (1000000, 2000000))
+    os.symlink('ordner', os.path.join(path, 'ordner.symlink'))
+    os.utime(os.path.join(path, 'ordner.symlink'), (1000000, 2000000))
+
+#    shutil.copytree(os.path.join(path, 'ordner'), os.path.join(path, 'ordner.copy'))
+
+def delete_everything(path):
     files = os.listdir(path)
     for file in files:
-        if os.path.isfile(os.path.join(path, file)):
+        if os.path.isfile(os.path.join(path, file)) or os.path.islink(os.path.join(path, file)):
             os.remove(os.path.join(path, file))
         elif os.path.isdir(os.path.join(path, file)):
             shutil.rmtree(os.path.join(path, file))
@@ -91,13 +100,14 @@ def make_change2(path):
 class DataHandler:
     def __init__(self, data_dir):
         self.data_dir = data_dir
-        self.changes = [make_change1, make_change2]
+        self.changes = [delete_two_files, add_symlinks_and_copies, delete_everything]
         self.change_counter = 0
 
     def create_data(self):
         self.change_counter = 0
         print 'creating data'
         create_data(self.data_dir)
+        sleep(1)
         create_data(self.data_dir + str(self.change_counter))
 
     def change_data(self):
@@ -117,40 +127,66 @@ class DataHandler:
 
         for dirpath, dirnames, filenames in os.walk(path1):
 
-#            for dirname in dirnames:
-#                if not os.path.lexists(dirname)
-#                src = os.path.join(dirpath, dirname)
-#                dst = os.path.join(target, rel_path, dirname)
-#                copydir(src, dst)
-#    
+            for dirname in dirnames:
+                abs_dir_path1 = os.path.join(dirpath, dirname)
+                abs_dir_path2 = os.path.normpath(os.path.join(dirpath.replace(path1, path2), dirname))
+                if not os.path.lexists(abs_dir_path2):
+                    sys.exit('### FAILED dir or symlink ' + abs_dir_path2 + ' is missing')
+                if os.path.islink(abs_dir_path1) != os.path.islink(abs_dir_path2):
+                    sys.exit('### FAILED one dir is a symlink while the other is real dir')
+                stat1 = os.lstat(abs_dir_path1)
+                stat2 = os.lstat(abs_dir_path2)
+                if not stat1.st_uid == stat2.st_uid:
+                    sys.exit('### FAILED file ' + abs_dir_path2 + ' does not have same uid')
+                if not stat1.st_gid == stat2.st_gid:
+                    sys.exit('### FAILED file ' + abs_dir_path2 + ' does not have same gid')
+                if os.path.islink(abs_dir_path1):
+                    if not (stat1.st_size == stat2.st_size):
+                        sys.exit('### FAILED file ' + abs_dir_path2 + ' does not have same size')
+                    if os.readlink(abs_dir_path1) != os.readlink(abs_dir_path2):
+                        sys.exit('### FAILED dir links do not link to the same location')
+                else:
+                # Note: only compare the mode if it's not a symlink, because the symlink could be broken due
+                #    to different relative paths. Symlinks' mode is not used anywhere. They always inherit 
+                #    their targets' mode.
+                    if not stat1.st_mode == stat2.st_mode:
+                        sys.exit('### FAILED file ' + abs_dir_path2 + ' does not have same mode')
+                # Note: we can also not compare mtime, since we cannot explicitely set it for the symlink with utime
+                #    so there's no way for the comparison to have equal mtimes
+                    if not stat1.st_mtime == stat2.st_mtime:
+                        sys.exit('### FAILED file ' + abs_dir_path2 + ' does not have same mtime')
+
+
             for filename in filenames:
-                print 'Comparing', os.path.join(dirpath, filename), '***', os.path.normpath(os.path.join(dirpath.replace(path1, path2), filename))
                 abs_file_path1 = os.path.join(dirpath, filename)
                 abs_file_path2 = os.path.normpath(os.path.join(dirpath.replace(path1, path2), filename))
+                print 'Comparing', abs_file_path1, '***', abs_file_path2
                 if not os.path.lexists(abs_file_path2):
-                    sys.exit('### FAILED file ' + abs_file_path2 + ' is missing')
+                    sys.exit('### FAILED file or symlink ' + abs_file_path2 + ' is missing')
                 stat1 = os.lstat(abs_file_path1)
                 stat2 = os.lstat(abs_file_path2)
                 if not stat1.st_uid == stat2.st_uid:
                     sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same uid')
-                if not stat1.st_mode == stat2.st_mode:
-                    sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same mode')
                 if not stat1.st_gid == stat2.st_gid:
                     sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same gid')
                 if not stat1.st_size == stat2.st_size:
                     sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same size')
-                if not stat1.st_mtime == stat2.st_mtime:
-                    sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same mtime')
-#                if not stat1.st_ctime == stat2.st_ctime:
- #                   sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same ctime')
-#                if not stat1.st_atime == stat2.st_atime:
- #                   sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same atime')
-#                src = os.path.join(dirpath, filename)
-#                dst = os.path.join(target, rel_path, filename)
-#                if os.path.islink(src):
-#                    copysymlink(src, dst)
-#                else:
-#                    copyfile(src, dst)
+# Note: time is a complicated thing here:
+#     ctime cannot be changed at all, so there's no easy way to have equal ctimes in both directories to compare.
+#     atime changes as well too. Although it is possible to change, we leave that out here, because atime does 
+#     not matter a lot anyway. It's just the accesstime and has nothing to do with backup.
+                if os.path.islink(abs_file_path1):
+                    if os.readlink(abs_file_path1) != os.readlink(abs_file_path2):
+                        sys.exit('### FAILED file links do not link to the same location')
+                else:
+                    if not stat1.st_mode == stat2.st_mode:
+                        sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same mode')
+                    file1 = open(abs_file_path1, 'rb')
+                    file2 = open(abs_file_path2, 'rb')
+                    if file1.read() != file2.read():
+                        sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same content')
+                    if not stat1.st_mtime == stat2.st_mtime:
+                        sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same mtime')
 
 
     def cleanup(self):
