@@ -380,14 +380,15 @@ class CozyFS(fuse.Fuse):
             log.error("Can't write to FS in a restore session")
             return - errno.EROFS
 
-        pe = target_path.rsplit('/', 1)
+        (dirname, basename) = os.path.split(target_path)
+
         new_inode = self.__get_new_inode()
         ctime = time.time()
 
         self.db.execute('insert into DataPaths (backup_id,version,inode, data_path,type) values(?,?,?,?,?)', (self.backup_id, self.versions[0], new_inode, src_path, SOFT_LINK))
         self.db.execute('insert into uid (backup_id,version,inode, uid) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, self.GetContext()['uid']))
         self.db.execute('insert into gid (backup_id,version,inode, gid) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, self.GetContext()['gid']))
-        self.db.execute('insert into mode (backup_id,version,inode, mode) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, stat.S_IFLNK))
+        self.db.execute('insert into mode (backup_id,version,inode, mode) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, 0))
         self.db.execute('insert into atime (backup_id,version,inode, atime) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, ctime))
         self.db.execute('insert into ctime (backup_id,version,inode, ctime) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, ctime))
         self.db.execute('insert into mtime (backup_id,version,inode, mtime) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, ctime))
@@ -402,7 +403,7 @@ class CozyFS(fuse.Fuse):
                                              'type': SOFT_LINK,
                                              'uid': self.GetContext()['uid'],
                                              'gid': self.GetContext()['gid'],
-                                             'mode': stat.S_IFLNK,
+                                             'mode':  0,
                                              'atime': ctime,
                                              'ctime': ctime,
                                              'mtime': ctime,
@@ -412,8 +413,8 @@ class CozyFS(fuse.Fuse):
         self.cached_node_ids[target_path] = new_node_id
 
         query = 'insert into Nodes (backup_id,version,node_id,nodename,parent_node_id) values (?,?,?,?,?)'
-        log.debug(query2log(query), self.backup_id, self.versions[0], new_node_id, pe[1], self.__get_node_id_from_path(pe[0]))
-        self.db.execute(query, (self.backup_id, self.versions[0], new_node_id, pe[1], self.__get_node_id_from_path(pe[0])))
+        log.debug(query2log(query), self.backup_id, self.versions[0], new_node_id, basename, self.__get_node_id_from_path(dirname))
+        self.db.execute(query, (self.backup_id, self.versions[0], new_node_id, basename, self.__get_node_id_from_path(dirname)))
 
         self.my_commit()
         return 0
