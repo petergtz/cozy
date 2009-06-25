@@ -21,8 +21,9 @@ def copyfile(src, dst):
             src_stat.st_mode == dst_stat.st_mode and \
             src_stat.st_gid == dst_stat.st_gid and \
             src_stat.st_uid == dst_stat.st_uid and \
-            src_stat.st_atime == dst_stat.st_atime and \
+            src_stat.st_ctime == dst_stat.st_ctime and \
             src_stat.st_mtime == dst_stat.st_mtime:
+            # we're not interested in comparing atime, because that's the access time. Only accessing it, does not mean we need to back it up
     # TODO: maybe add more stats
             return
     print 'Copy file to target:', dst
@@ -32,13 +33,21 @@ def copyfile(src, dst):
 
 def copysymlink(src, dst):
     linkto = os.readlink(src)
+    src_stat = os.lstat(src)
     if os.path.lexists(dst):
-        if os.path.islink(dst) and os.readlink(dst) == linkto:
+        dst_stat = os.lstat(dst)
+        if os.path.islink(dst) and os.readlink(dst) == linkto and \
+            dst_stat.st_gid == src_stat.st_gid and \
+            dst_stat.st_uid == src_stat.st_uid:
             return
         else:
             os.remove(dst)
     print 'Copy symlink:', dst, '->', linkto
     os.symlink(linkto, dst)
+    os.lchown(dst, src_stat.st_uid, src_stat.st_gid)
+# new in python 2.6:    
+#    os.lchmod(dst, src_stat.st_mode)
+    os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
 
 def copydir(src, dst):
     src_stat = os.stat(src)
@@ -47,6 +56,7 @@ def copydir(src, dst):
         if src_stat.st_mode == dst_stat.st_mode and \
             src_stat.st_gid == dst_stat.st_gid and \
             src_stat.st_uid == dst_stat.st_uid and \
+            src_stat.st_ctime == dst_stat.st_ctime and \
             src_stat.st_mtime == dst_stat.st_mtime:
 #            src_stat.st_ctime == dst_stat.st_ctime and \
             pass
@@ -85,7 +95,10 @@ def sync(source, target):
         for dirname in dirnames:
             src = os.path.join(dirpath, dirname)
             dst = os.path.join(target, rel_path, dirname)
-            copydir(src, dst)
+            if os.path.islink(src):
+                copysymlink(src, dst)
+            else:
+                copydir(src, dst)
 
         for filename in filenames:
             src = os.path.join(dirpath, filename)
