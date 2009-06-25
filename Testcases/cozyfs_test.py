@@ -317,6 +317,14 @@ try:
     softlink('folder4/hardlink_to_image.jpg', 'softlink_to_image.jpg')
     umount(mountpath)
 
+    version4 = snapshot(TARGET_DIR, 666, version3)
+
+    mount(mountpath, target_dir=TARGET_DIR, backup_id=666, version=version4)
+    compare_file_content(os.path.join(TC_DIR, 'image1.jpg'), 'folder4/hardlink_to_image.jpg')
+    compare_file_content('softlink_to_image.jpg', 'folder4/hardlink_to_image.jpg')
+    umount(mountpath)
+
+
     mount(mountpath, target_dir=TARGET_DIR, backup_id=666, version=version2)
 
     neg_exists('folder4')
