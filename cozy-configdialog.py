@@ -15,7 +15,7 @@ import time
 import re
 
 ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
-COZY_MKFS_PATH = os.path.join(ROOT_DIR, 'cozy-mkfs.py')
+COZY_MKFS_PATH = os.path.join(ROOT_DIR, 'mkfs.cozyfs.py')
 COZY_MANAGER_PATH = os.path.join(ROOT_DIR, 'cozy-manager.py')
 COZY_APPLET_PATH = os.path.join(ROOT_DIR, 'cozy-applet.py')
 BUILDER_XML_PATH = os.path.join(ROOT_DIR, 'configuration_dialog.xml')
