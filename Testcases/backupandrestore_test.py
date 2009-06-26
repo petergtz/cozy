@@ -12,7 +12,7 @@ TC_DIR = os.path.abspath(os.path.dirname(__file__))
 ROOT_DIR = os.path.join(TC_DIR, '..')
 
 
-COZY_MKFS_PATH = os.path.join(ROOT_DIR, 'cozy-mkfs.py')
+COZY_MKFS_PATH = os.path.join(ROOT_DIR, 'mkfs.cozyfs.py')
 COZY_BACKUP_PATH = os.path.join(ROOT_DIR, 'cozy-backup.py')
 COZY_MANAGER_PATH = os.path.join(ROOT_DIR, 'cozy-manager.py')
 TEST_DATA = os.path.join(TC_DIR, 'TestData')
@@ -243,7 +243,7 @@ try:
         cozy_backup.backup_data()
         data_handler.change_data()
 
-    prev_version_path = cozy_backup.get_prev_version_path(DATA)
+    prev_version_path = DATA
     for change_number in range(len(data_handler.changes)):
         data_handler.undo_change_data()
         prev_version_path = cozy_backup.get_prev_version_path(prev_version_path)
