@@ -6,7 +6,7 @@ import os
 import tempfile
 import shutil
 
-import snapshot
+import cozyfssnapshot
 import cozy.configutils
 from cozy.mount import mount, umount
 
@@ -144,4 +144,4 @@ if __name__ == '__main__':
 
         umount(mountpoint)
 
-        snapshot.snapshot(target_path, backup_id)
+        cozyfssnapshot.snapshot(target_path, backup_id)
