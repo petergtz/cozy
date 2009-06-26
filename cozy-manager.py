@@ -126,14 +126,16 @@ class Manager(dbus.service.Object):
             return None
 
         if path.startswith(self.temp_mount_dir):
-            path = path.replace('%20', ' ')
+#            path = path.replace('%20', ' ')
             result = str(int(date2epoche(path.replace(self.temp_mount_dir + '/', '').split('/', 1)[0])))
             log.debug("returning %s", result)
             return result
 
     def _get_versions_from_before(self, backup_id, current_version):
         if current_version is None:
-            cursor = self.db.execute("select version from Versions where backup_id=? ORDER BY version DESC", (backup_id,))
+            cursor = self.db.execute("select max(version) from Versions where backup_id=?", (backup_id,))
+            cursor = self.db.execute("select based_on_version from Versions where backup_id=? and version=?", (backup_id, cursor.fetchone()[0]))
+
         else:
             cursor = self.db.execute("select based_on_version from Versions where backup_id=? and version=?", (backup_id, current_version))
 
@@ -144,6 +146,8 @@ class Manager(dbus.service.Object):
             cursor.execute("select based_on_version from Versions where backup_id=? and version=?", (backup_id, version))
             version = cursor.fetchone()[0]
 
+#        if len(versions) > 0:
+#            del versions[0]
         return versions
 
     def _get_versions_from_after(self, backup_id, current_version):
