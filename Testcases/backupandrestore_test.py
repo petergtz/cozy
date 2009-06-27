@@ -122,6 +122,11 @@ class DataHandler:
             sys.exit('### FAILED: change counter already 0')
         self.change_counter -= 1
 
+    def redo_change_data(self):
+        if self.change_counter == len(self.changes):
+            sys.exit('### FAILED: change counter already at max')
+        self.change_counter += 1
+
     def compare_data_with(self, path2):
         path1 = self.data_dir + str(self.change_counter)
 
@@ -220,6 +225,14 @@ class CozyBackup:
         except Exception, e:
             sys.exit('### FAILED get_pre_version_path: ' + str(e))
 
+    def get_next_version_path(self, path):
+        try:
+            next_version_path = self.manager.get_next_version_path(path, dbus_interface='org.freedesktop.Cozy.Manager')
+            print '### PASSED get_next_version_path'
+            return next_version_path
+        except Exception, e:
+            sys.exit('### FAILED get_next_version_path: ' + str(e))
+
 
     def close_restore_mode(self):
         self.manager.close_restore_mode(dbus_interface='org.freedesktop.Cozy.Manager')
@@ -248,6 +261,12 @@ try:
         data_handler.undo_change_data()
         prev_version_path = cozy_backup.get_prev_version_path(prev_version_path)
         data_handler.compare_data_with(prev_version_path)
+
+    next_version_path = prev_version_path
+    for change_number in range(len(data_handler.changes)):
+        data_handler.redo_change_data()
+        next_version_path = cozy_backup.get_next_version_path(next_version_path)
+        data_handler.compare_data_with(next_version_path)
 
 finally: # clean up in any case!
     try:
