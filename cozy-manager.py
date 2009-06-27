@@ -167,6 +167,8 @@ class Manager(dbus.service.Object):
             ret = cursor.fetchone()
             if ret is None:
                 versions.append(None)
+                if len(versions) >= 2:
+                    del versions[-2]
                 return versions
             version = ret[0]
 
