@@ -41,57 +41,60 @@ class ConfigMediator:
 
         self.config = Configuration()
 
-        try:
-            self.enable_checkbox.set_active(self.config.is_backup_enabled())
-        except Configuration.ConfigFileIncompleteError, e:
-            print "Warning: " + str(e)
+        self.__setup_controls()
+
+    def __setup_controls(self):
+        if self.config.backup_enabled is not None:
+            self.enable_checkbox.set_active(self.config.backup_enabled)
+        else:
+            print "Warning: Cozy backup is not configured properly"
             print "Disabling backup."
             self.enable_checkbox.set_active(False)
 
         self.global_sections.set_sensitive(self.enable_checkbox.get_active())
 
-        try:
-            self.source_path_label.set_text(self.config.get_source_path())
-        except Configuration.ConfigFileIncompleteError, e:
-            self.source_path_label.set_text(os.path.expanduser('~'))
+        if self.config.source_path is not None:
+            self.source_path_label.set_text(self.config.source_path)
+        else:
+            self.source_path_label.set_text('Not configured')
 
-        try:
-            if self.config.is_removeable_target_volume():
+        if self.config.target_volume_removeable is not None:
+            if self.config.target_volume_removeable:
                 self.temp_radio.set_active(True)
-                try:
-                    self.volume_name_label.set_text(self.config.get_target_uuid())
-                    self.relative_path_label.set_text(self.config.get_relative_target_path())
-                except Configuration.ConfigFileIncompleteError, e:
-                    print "Warning: " + str(e)
+                if self.config.target_uuid is not None and self.config.relative_target_path is not None:
+                    self.volume_name_label.set_text(self.config.target_uuid)
+                    self.relative_path_label.set_text(self.config.relative_target_path)
+                else:
+                    self.volume_name_label.set_text('Not configured')
+                    self.relative_path_label.set_text('Not configured')
             else:
                 self.permanent_radio.set_active(True)
-                try:
-                    self.absolute_path_label.set_text(self.config.get_full_target_path())
-                except Configuration.ConfigFileIncompleteError, e:
-                    print "Warning: " + str(e)
-        except Configuration.ConfigFileIncompleteError, e:
+                if self.config.full_target_path is not None:
+                    self.absolute_path_label.set_text(self.config.full_target_path)
+                else:
+                    self.absolute_path_label.set_text('Not configured')
+        else:
             self.permanent_radio.set_active(True)
-            self.config.set_removeable_target_volume(False)
-            print "Warning: " + str(e)
-            print "Setting backup mode to permanent."
+            self.absolute_path_label.set_text('Not configured')
+
         self.on_permanent_mode_changed(self.permanent_radio)
         self.on_temporary_mode_changed(self.temp_radio)
 
     def on_backup_enable(self, widget, data=None):
         self.global_sections.set_sensitive(widget.get_active())
-        self.config.set_backup_enabled(widget.get_active())
+        self.config.backup_enabled = widget.get_active()
 
     def on_choose_source_btn_clicked(self, widget, data=None):
         dlg = gtk.FileChooserDialog(action=gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
                                     buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_OPEN, gtk.RESPONSE_OK))
         if dlg.run() == gtk.RESPONSE_OK:
-            self.source_path_label.set_text(dlg.get_filename())
-            self.config.set_source_path(dlg.get_filename())
+            self.config.source_path = dlg.get_filename()
+            self.source_path_label.set_text(self.config.source_path)
         dlg.destroy()
 
     def on_permanent_mode_changed(self, widget, data=None):
         if widget.get_active():
-            self.config.set_removeable_target_volume(False)
+            self.config.target_volume_removeable = False
 #            self.config.set_full_target_path(target_chooser.get_filename())
             self.permanent_group.set_sensitive(True)
         else:
@@ -99,7 +102,7 @@ class ConfigMediator:
 
     def on_temporary_mode_changed(self, widget, data=None):
         if widget.get_active():
-            self.config.set_removeable_target_volume(True)
+            self.config.target_volume_removeable = True
 #            self.config.set_full_target_path(target_chooser.get_filename())
             self.temp_group.set_sensitive(True)
         else:
@@ -109,7 +112,7 @@ class ConfigMediator:
         dlg = gtk.FileChooserDialog(action=gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
                                     buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_OPEN, gtk.RESPONSE_OK))
         if dlg.run() == gtk.RESPONSE_OK:
-            self.config.set_full_target_path(dlg.get_filename())
+            self.config.full_target_path = dlg.get_filename()
             self.absolute_path_label.set_text(dlg.get_filename())
         dlg.destroy()
 
@@ -119,36 +122,62 @@ class ConfigMediator:
                                     buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_OPEN, gtk.RESPONSE_OK))
         if dlg.run() == gtk.RESPONSE_OK:
 #            self.source_path_label.set_text(dlg.get_filename())
-            self.config.set_full_target_path(dlg.get_filename())
+            self.config.full_target_path = dlg.get_filename()
  #           self.config.set_source_path(dlg.get_filename())
-            self.volume_name_label.set_text(self.config.get_target_uuid())
-            self.relative_path_label.set_text(self.config.get_relative_target_path())
+            self.volume_name_label.set_text(self.config.target_uuid)
+            self.relative_path_label.set_text(self.config.relative_target_path)
         dlg.destroy()
 
+    def on_reset(self, widget, data=None):
+        self.config = Configuration()
+        self.__setup_controls()
 
     def on_close(self, widget, data=None):
         if not self.delete_event(widget, None):
            self.destroy(widget, data)
 
+    def __applet_running(self):
+        a = os.system("ps -ef | grep -v grep | grep cozy-applet.py")
+        if a != 0:
+            return False
+        return True
+
+    def __start_applet(self):
+        subprocess.Popen([COZY_APPLET_PATH])
+
+    def __stop_applet(self):
+        subprocess.call(['killall', 'cozy-applet.py'])
+
 
     def delete_event(self, widget, event, data=None):
         if self.config.changed():
             self.config.write()
-            subprocess.call([COZY_MKFS_PATH, self.config.get_full_target_path(), str(self.config.get_backup_id())])
+            if not self.config.backup_enabled:
+                self.__stop_applet()
+                self.__stop_manager()
+                self.__remove_crontab_entry()
+                return False
+
+            if self.config.full_target_path is None or self.config.source_path is None:
+                dialog = builder.get_object("config_not_complete_confirmation_dialog")
+                result = dialog.run()
+                dialog.hide()
+
+                if result == 2:
+                    return True
+                else:
+                    self.config.backup_enabled = False
+                    return self.delete_event(widget, event, data)
+
+            subprocess.call([COZY_MKFS_PATH, self.config.full_target_path, str(self.config.backup_id)])
             if self.permanent_radio.get_active():
-                self.add_crontab_entry()
-                subprocess.call(['killall', 'cozy-applet.py'])
+                self.__add_crontab_entry()
+                self.__stop_applet()
             else:
-                self.remove_crontab_entry()
-                a = os.system("ps -ef | grep -v grep | grep cozy-applet.py")
-                if a != 0:
-                    subprocess.Popen([COZY_APPLET_PATH])
-            self.restart_manager()
-#        dialog = builder.get_object("confirmation_dialog")
-#        result = dialog.run()
-#        dialog.hide()
-#
-#        return result == 2
+                self.__remove_crontab_entry()
+                if not self.__applet_running():
+                    self.__start_applet()
+            self.__restart_manager()
         return False
 
     def destroy(self, widget, data=None):
@@ -157,9 +186,14 @@ class ConfigMediator:
             gtk.main_quit()
 
 
-    def restart_manager(self):
+    def __restart_manager(self):
         print 'Restarting cozy-manager.py'
         os.system(COZY_MANAGER_PATH + ' restart')
+        time.sleep(2)
+
+    def __stop_manager(self):
+        print 'Stopping cozy-manager.py'
+        os.system(COZY_MANAGER_PATH + ' stop')
         time.sleep(2)
 
 #        if process.poll() is not None:
@@ -170,7 +204,7 @@ class ConfigMediator:
 #            else:
 #                print 'Could not start cozy-manager due to unknown reasons. cozy-applet will not work properly. TODO: should be a popup-window.'
 
-    def add_crontab_entry(self):
+    def __add_crontab_entry(self):
         'Adds a new entry to the users crontab.'
         pid = subprocess.Popen(['crontab', '-l'], stdout=subprocess.PIPE)
         crontab = pid.stdout.read()
@@ -180,7 +214,7 @@ class ConfigMediator:
         pid.stdin.write(new_crontab)
         pid.stdin.close()
 
-    def remove_crontab_entry(self):
+    def __remove_crontab_entry(self):
         'Removes an entry from the users crontab.'
         pid = subprocess.Popen(['crontab', '-l'], stdout=subprocess.PIPE)
         crontab = pid.stdout.read()
