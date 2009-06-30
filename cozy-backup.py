@@ -17,11 +17,13 @@ def copyfile(src, dst):
     if os.path.exists(dst):
         src_stat = os.stat(src)
         dst_stat = os.stat(dst)
+            # Note: if we use ctime as a comparison, the backup will always be done for all files
+            # because ctime will never be the same, since we're changing it directly after we
+            # copied a file into the backup. So we don't compare ctime!
         if src_stat.st_size == dst_stat.st_size and \
             src_stat.st_mode == dst_stat.st_mode and \
             src_stat.st_gid == dst_stat.st_gid and \
             src_stat.st_uid == dst_stat.st_uid and \
-            src_stat.st_ctime == dst_stat.st_ctime and \
             src_stat.st_mtime == dst_stat.st_mtime:
             # we're not interested in comparing atime, because that's the access time. Only accessing it, does not mean we need to back it up
     # TODO: maybe add more stats
@@ -56,7 +58,6 @@ def copydir(src, dst):
         if src_stat.st_mode == dst_stat.st_mode and \
             src_stat.st_gid == dst_stat.st_gid and \
             src_stat.st_uid == dst_stat.st_uid and \
-            src_stat.st_ctime == dst_stat.st_ctime and \
             src_stat.st_mtime == dst_stat.st_mtime:
 #            src_stat.st_ctime == dst_stat.st_ctime and \
             pass
@@ -122,15 +123,14 @@ if __name__ == '__main__':
 
     if answer in ['y', 'Y', 'yes']:
 
-        try:
-            config = cozy.configutils.Configuration()
-            target_path = config.get_full_target_path()
-            backup_id = config.get_backup_id()
-            source_paths = [config.get_source_path()] # in the future get_source_path will be get_source_paths
-        except Exception, e:
-
-            sys.stderr.write(str(e) + "\n")
+        config = cozy.configutils.Configuration()
+        target_path = config.full_target_path
+        backup_id = config.backup_id
+        source_paths = [config.source_path] # in the future get_source_path will be get_source_paths
+        # CHECKME: is this possible?
+        if target_path is None or backup_id is None or None in source_paths:
             exit('Error: Aborting backup because getting the configuration failed')
+
 
         try:
             mountpoint = tempfile.mkdtemp(prefix='cozy')
