@@ -26,7 +26,7 @@ import time
 ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
 COZY_BACKUP_PATH = os.path.join(ROOT_DIR, 'cozy-backup.py')
 COZY_MANAGER_PATH = os.path.join(ROOT_DIR, 'cozy-manager.py')
-COZY_CONFIGDLG_PATH = os.path.join(ROOT_DIR, 'configdialog.py')
+COZY_CONFIGDLG_PATH = os.path.join(ROOT_DIR, 'cozy-configdialog.py')
 COZY_ICON_PATH = os.path.join(ROOT_DIR, 'Icon/cozy.svg')
 
 class CozyIcon(gtk.StatusIcon):
