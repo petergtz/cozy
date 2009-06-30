@@ -39,13 +39,13 @@ class Manager(dbus.service.Object):
 
         try:
             self.config = Configuration()
-            if not self.config.is_backup_enabled():
+            if not self.config.backup_enabled:
                 sys.stderr.write("Backup is not enabled in configuration")
                 sys.exit(1)
-            self.src_path = self.config.get_source_path()
-            self.backup_id = self.config.get_backup_id()
-            if self.config.is_removeable_target_volume():
-                self.target_uuid = self.config.get_target_uuid()
+            self.src_path = self.config.source_path
+            self.backup_id = self.config.backup_id
+            if self.config.target_volume_removeable:
+                self.target_uuid = self.config.target_uuid
             else:
                 self.target_uuid = ''
         except Configuration.ConfigFileIncompleteError, e:
@@ -57,7 +57,7 @@ class Manager(dbus.service.Object):
 
         self.temp_mount_dir = tempfile.mkdtemp(prefix='cozy')
 
-        if self.config.is_removeable_target_volume():
+        if self.config.target_volume_removeable:
             self.system_bus = dbus.SystemBus()
         #bus.add_signal_receiver(on_device_added, 'DeviceAdded', 'org.freedesktop.Hal.Manager', 'org.freedesktop.Hal', '/org/freedesktop/Hal/Manager')
 
@@ -66,14 +66,14 @@ class Manager(dbus.service.Object):
 
         self.load_config()
 
-        if self.config.is_removeable_target_volume():
+        if self.config.target_volume_removeable:
             if self.is_backup_volume_connected():
                 self.removeable_volume_connected_signal()
 
 
     def load_config(self):
         try:
-            self.target_path = self.config.get_full_target_path()
+            self.target_path = self.config.full_target_path
 
             self.db = sqlite3.connect(os.path.join(self.target_path, DBFILE))
             self.db.row_factory = sqlite3.Row
@@ -194,7 +194,7 @@ class Manager(dbus.service.Object):
 
     def _backup_exists(self, path):
         log.debug("Params: %s", path)
-        if self.config.is_removeable_target_volume() and not self.is_backup_volume_connected():
+        if self.config.target_volume_removeable and not self.is_backup_volume_connected():
             log.debug("Backup volume is not connected. returning ''")
             return (False, '', '')
         log.debug("checking if backup_id exists in backup")
@@ -250,7 +250,7 @@ class Manager(dbus.service.Object):
     @dbus.service.method(dbus_interface='org.freedesktop.Cozy.Manager',
                          in_signature='s', out_signature='s')
     def get_newest_version_path(self, path):
-        if self.config.is_removeable_target_volume() and not self.is_backup_volume_connected():
+        if self.config.target_volume_removeable and not self.is_backup_volume_connected():
             log.debug("Backup volume is not connected. returning ''")
             return ''
         rel_path = self._get_relative_path(path)
