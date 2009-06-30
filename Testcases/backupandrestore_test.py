@@ -33,14 +33,14 @@ class Setup:
             os.rename(DOT_COZY, DOT_COZY_BACKUP)
 
         config = cozy.configutils.Configuration()
-        config.set_backup_enabled(True)
+        config.backup_enabled = True
         #config.set_backup_id(BACKUP_ID)
-        config.set_removeable_target_volume(False)
-        config.set_full_target_path(BACKUP_DIR)
-        config.set_source_path(DATA)
+        config.target_volume_removeable = False
+        config.full_target_path = BACKUP_DIR
+        config.source_path = DATA
         config.write()
 
-        self.backup_id = config.get_backup_id()
+        self.backup_id = config.backup_id
 
     def make_cozyfs(self):
         os.mkdir(BACKUP_DIR)
