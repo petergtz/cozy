@@ -64,11 +64,11 @@ class CozyRestoreNautilusExtension(nautilus.MenuProvider):
 			self.session_bus = dbus.SessionBus()
 			self.manager = self.session_bus.get_object('org.freedesktop.Cozy', '/org/freedesktop/Cozy/Manager')
 			if not self.is_in_restore_mode:
-				item = nautilus.MenuItem(name="NautilusPython::restoremode", icon='cozy', label="Start Restore Mode", tip="Switches Nautilus into Restore Mode to discover older versions of files and folders")
+				item = nautilus.MenuItem(name="NautilusPython::restoremode", icon='cozy', label="Enter Restore Mode", tip="Switches Nautilus into Restore Mode to discover older versions of files and folders")
 				item.connect("activate", self.go_to_restore_mode, path, window)
 				items.append(item)
 			else:
-				item = nautilus.MenuItem(name="NautilusPython::closerestorebackupmode", label="Close Restore Mode", tip="Switches back to normal mode", icon='exit')
+				item = nautilus.MenuItem(name="NautilusPython::closerestoremode", label="Exit Restore Mode", tip="Exits from Restore Mode and goes back to normal mode", icon='close-cozy')
 				item.connect("activate", self.close_restore_mode, path, window)
 				items.append(item)
 
