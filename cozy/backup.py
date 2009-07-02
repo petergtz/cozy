@@ -1,5 +1,3 @@
-import backup
-
 class Backup(object):
 
     class MountException(Exception):

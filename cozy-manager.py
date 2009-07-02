@@ -175,13 +175,6 @@ class Manager(dbus.service.Object):
 
         return versions
 
-    def _is_mounted(self, version):
-        if os.path.exists(os.path.join(self.temp_mount_dir, str(version))) and \
-            os.path.ismount(os.path.join(self.temp_mount_dir, str(version))):
-            return True
-
-        return False
-
     def _mount(self, version):
         try:
             mount(self.target_path, os.path.join(self.temp_mount_dir, epoche2date(version)), self.backup_id, int(version))

@@ -4,6 +4,7 @@ from time import strptime, mktime, strftime, localtime, sleep
 import subprocess
 import pwd
 
+from filesystem import FileSystem
 
 from backup import Backup
 
@@ -58,11 +59,11 @@ class CozyFSBackup(Backup):
         process = self.shell.call(cmdline)
         if not self.shell.is_running(process):
             if self.shell.return_code(process) == 3:
-                raise CozyFSFactory.MountException('Error: Mount failed because database couldn''t be found')
+                raise CozyFSBackup.MountException('Error: Mount failed because database couldn''t be found')
             else:
-                raise CozyFSFactory.MountException('Error: Mount failed due to unknown reasons')
+                raise CozyFSBackup.MountException('Error: Mount failed due to unknown reasons')
 
-        return backup.Backup(mount_point)
+        return FileSystem(mount_point)
 
 
     def clone(self, backup_path, backup_id, version=None):
