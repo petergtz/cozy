@@ -12,7 +12,9 @@ class Data(object):
 
     def back_up_to(self, backup):
         filesystem = self.__associate_with(backup)
-        self.__sync_to(filesystem)
+        errors = self.__sync_to(filesystem)
+        if len(errors) != 0:
+            raise Exception('Errors during syncing:\n' + str(errors))
 
     def __associate_with(self, backup):
         if self.config.full_backup_path is None or self.config.backup_id is None:
