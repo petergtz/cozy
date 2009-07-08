@@ -5,7 +5,7 @@ import warnings
 class FileSystem(object):
 
     def __init__(self, mount_point):
-        self.mount_point = mount_point
+        self.__mount_point = mount_point
 
     def __del__(self):
         self.__unmount()
@@ -33,3 +33,13 @@ class FileSystem(object):
 
         return False
 
+    def __get_mount_point(self):
+        return self.__mount_point
+
+    mount_point = property(__get_mount_point)
+
+    def has_relative_path(self, relative_path):
+        return os.path.exists(os.path.join(self.mount_point, relative_path))
+
+    def full_path(self, relative_path):
+        return os.path.join(self.mount_point, relative_path)

@@ -16,7 +16,7 @@ import os
 import shutil
 import sqlite3
 
-from cozy.md5sum import md5sum, md5sum_from_string
+from utils.md5sum import md5sum, md5sum_from_string
 
 import logging
 

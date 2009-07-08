@@ -38,8 +38,11 @@ class VolumeManager(object):
 
 class Configuration(object):
 
-    def __init__(self, filename=None, volume_manager=VolumeManager()):
-        self.volume_manager = volume_manager
+    def __init__(self, filename=None, volume_manager=None):
+        if volume_manager is None:
+            self.volume_manager = VolumeManager()
+        else:
+            self.volume_manager = volume_manager
         self.parser = ConfigParser.SafeConfigParser()
         if filename is None:
             result = self.parser.read(os.path.expanduser('~/.cozy'))

@@ -29,10 +29,7 @@ class FileSystemMock(object):
     def __init__(self):
         self.sync_with_called = False
         self.errors = []
-
-    def sync_with(self, data_path):
-        self.sync_with_called = True
-        return self.errors
+        self.mount_point = '/the/mount/point'
 
 
 class TestData(unittest.TestCase):
@@ -47,7 +44,6 @@ class TestData(unittest.TestCase):
     def test_back_up_to(self):
         self.data = Data(self.config)
         self.data.back_up_to(self.backup)
-        self.assert_(self.backup.clone_called)
         self.assert_(self.backup.mount_latest_called)
 
     def test_data_path_not_configured(self):
