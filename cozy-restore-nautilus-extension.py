@@ -16,6 +16,7 @@ class CozyRestoreNautilusExtension(nautilus.MenuProvider):
 #            sys.stderr.write(str(e))
 
         self.is_in_restore_mode = False
+        self.service_unknown_msg_shown = False
 
 # FIXME: seems like the destructor gets never called by nautilus. So automatic cleanup is impossible
     def __del__(self):
@@ -84,8 +85,10 @@ class CozyRestoreNautilusExtension(nautilus.MenuProvider):
                     item.connect("activate", self.go_to_next_version, path, window)
                     items.append(item)
         except dbus.DBusException, e:
-            notifications = session_bus.get_object('org.freedesktop.Notifications', '/org/freedesktop/Notifications')
-            notifications.Notify("", 0, "", "Error in Cozy Nautilus Extension", 'Could not communicate with cozy-manager.py due to: ' + str(e), list(), {}, 12000, dbus_interface='org.freedesktop.Notifications')
+            if not self.service_unknown_msg_shown:
+                notifications = session_bus.get_object('org.freedesktop.Notifications', '/org/freedesktop/Notifications')
+                notifications.Notify("", 0, "", "Error in Cozy Nautilus Extension", 'Could not communicate with cozy-manager.py due to: ' + str(e), list(), {}, 12000, dbus_interface='org.freedesktop.Notifications')
+                self.service_unknown_msg_shown = True
             items = []
         except Exception, e: # This must be something like a DBus object not existing exception
             notifications = session_bus.get_object('org.freedesktop.Notifications', '/org/freedesktop/Notifications')

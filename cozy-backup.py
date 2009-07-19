@@ -4,6 +4,7 @@ import sys
 
 from cozy.configuration import Configuration
 from cozy.backupprovider import BackupProvider
+from cozy.data import Data
 
 
 if __name__ == '__main__':
@@ -26,4 +27,4 @@ if __name__ == '__main__':
         data = Data(config)
         data.back_up_to(backup)
 
-        backup.clone(config.full_backup_path, config.backup_id)
+        backup.clone_latest()

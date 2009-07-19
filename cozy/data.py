@@ -1,27 +1,24 @@
 import sys
 import os
+import shutil
 
 from backup import Backup
 
 
 class Data(object):
+    class ConfigIncompleteException(Exception):
+        pass
 
     def __init__(self, config):
-        self.config = config
-        if self.config.data_path is None:
-            sys.exit('Error: Aborting doing backup because location of data is not configured.')
+        if config.data_path is None:
+            raise Data.ConfigIncompleteException()
+        self.data_path = config.data_path
 
     def back_up_to(self, backup):
-        filesystem = self.__associate_with(backup)
+        filesystem = backup.mount_latest()
         errors = self.__sync_to(filesystem)
         if len(errors) != 0:
             raise Exception('Errors during syncing:\n' + str(errors))
-
-    def __associate_with(self, backup):
-        if self.config.full_backup_path is None or self.config.backup_id is None:
-            sys.exit('Error: Aborting doing backup because getting the backup configuration failed')
-        filesystem = backup.mount_latest(self.config.full_backup_path, self.config.backup_id)
-        return filesystem
 
     def __copyfile(self, src, dst):
         src_stat = os.stat(src)
@@ -37,7 +34,6 @@ class Data(object):
                 src_stat.st_uid == dst_stat.st_uid and \
                 src_stat.st_mtime == dst_stat.st_mtime:
                 # we're not interested in comparing atime, because that's the access time. Only accessing it, does not mean we need to back it up
-        # TODO: maybe add more stats
                 return
         print 'Copy file to target:', dst
         shutil.copy2(src, dst)
@@ -87,7 +83,7 @@ class Data(object):
 
     def __sync_to(self, filesystem):
         target = filesystem.mount_point
-        source = self.config.data_path
+        source = self.data_path
 
         errors = []
 
@@ -135,25 +131,3 @@ class Data(object):
                     errors.append(str(e))
 
         return errors
-
-
-
-
-
-
-
-#        
-#
-#            if len(errors) > 0:
-#                sys.stderr.write(str(errors))
-#                sys.exit(1)
-#
-#        except Backup.MountException, e:
-#            sys.stderr.write(str(e) + "\n"
-#                             'Error: Aborting backup because mounting failed')
-#            sys.exit(2)
-#        except Exception, e:
-#            sys.stderr.write(str(e) + "\n"
-#                             'Error: Aborting backup')
-#            sys.exit(3)
-#

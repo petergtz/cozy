@@ -7,7 +7,7 @@ from cozy.backup import Backup
 
 class ConfigurationMock(object):
     def __init__(self):
-        self.data_path = '/this/is/my/standard/path'
+        self.data_path = '/data/path'
         self.full_backup_path = '/full/backup/path'
         self.backup_id = 12345
 
@@ -15,14 +15,11 @@ class ConfigurationMock(object):
 class BackupMock(Backup):
     def __init__(self):
         self.mount_latest_called = False
-        self.clone_called = False
 
-    def mount_latest(self, backup_path, backup_id):
+    def mount_latest(self):
        self.mount_latest_called = True
        return FileSystemMock()
 
-    def clone(self, backup_path, backup_id, version=None):
-       self.clone_called = True
 
 class FileSystemMock(object):
 
@@ -47,7 +44,7 @@ class TestData(unittest.TestCase):
         self.assert_(self.backup.mount_latest_called)
 
     def test_data_path_not_configured(self):
-        self.config.data_path = None
+        self.data_path = None
         try:
             self.data = Data(self.config)
             self.data.back_up_to(backup)

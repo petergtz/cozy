@@ -1,10 +1,12 @@
 #!/usr/bin/python
 
+from __future__ import with_statement
+
 import sys
 import os
 import shutil
 import subprocess
-import cozy.configutils
+import cozy.configuration
 import dbus
 from time import sleep
 
@@ -24,20 +26,21 @@ BACKUP_DIR = os.path.expanduser('~/Cozy-TC-Backup-Dir')
 
 
 class Setup:
-    def set_up(self):
+    def __enter__(self):
         self.create_configuration()
         self.make_cozyfs()
+        return self
 
     def create_configuration(self):
         if os.path.exists(DOT_COZY):
             os.rename(DOT_COZY, DOT_COZY_BACKUP)
 
-        config = cozy.configutils.Configuration()
+        config = cozy.configuration.Configuration()
         config.backup_enabled = True
         #config.set_backup_id(BACKUP_ID)
-        config.target_volume_removeable = False
-        config.full_target_path = BACKUP_DIR
-        config.source_path = DATA
+        config.backup_volume_removeable = False
+        config.full_backup_path = BACKUP_DIR
+        config.data_path = DATA
         config.write()
 
         self.backup_id = config.backup_id
@@ -58,12 +61,10 @@ class Setup:
         print stdout
         return stdout
 
-    def cleanup_configuration(self):
+    def __exit__(self, type, value, traceback):
         if os.path.exists(DOT_COZY_BACKUP):
             os.rename(DOT_COZY_BACKUP, DOT_COZY)
 
-        if os.path.exists(DATA):
-            shutil.rmtree(DATA)
         if os.path.exists(BACKUP_DIR):
             shutil.rmtree(BACKUP_DIR)
 
@@ -102,6 +103,9 @@ class DataHandler:
         self.data_dir = data_dir
         self.changes = [delete_two_files, add_symlinks_and_copies, delete_everything]
         self.change_counter = 0
+
+    def __enter__(self):
+        return self
 
     def create_data(self):
         self.change_counter = 0
@@ -194,19 +198,30 @@ class DataHandler:
                         sys.exit('### FAILED file ' + abs_file_path2 + ' does not have same mtime')
 
 
-    def cleanup(self):
+    def __exit__(self, type, value, traceback):
         shutil.rmtree(self.data_dir)
         for change_number in range(len(self.changes) + 1):
             shutil.rmtree(self.data_dir + str(change_number))
 
 class CozyBackup:
 
-    def set_up(self):
+    def __enter__(self):
         subprocess.call([COZY_MANAGER_PATH, 'start'])
+        if not self.__manager_running():
+            msg = open('/tmp/cozy-manager-stderr').read()
+            os.remove('/tmp/cozy-manager-stderr')
+            raise Exception(msg)
 
         self.session_bus = dbus.SessionBus()
         self.manager = self.session_bus.get_object('org.freedesktop.Cozy', '/org/freedesktop/Cozy/Manager')
 
+        return self
+
+    def __manager_running(self):
+        a = os.system("ps -ef | grep -v grep | grep cozy-manager.py")
+        if a != 0:
+            return False
+        return True
 
     def backup_data(self):
         cmdline = [COZY_BACKUP_PATH, '-f']
@@ -237,51 +252,33 @@ class CozyBackup:
     def close_restore_mode(self):
         self.manager.close_restore_mode(dbus_interface='org.freedesktop.Cozy.Manager')
 
-    def cleanup(self):
+    def __exit__(self, type, value, traceback):
+        self.close_restore_mode()
         subprocess.call([COZY_MANAGER_PATH, 'stop'])
 
 
-try:
+with Setup() as setup:
+    with CozyBackup() as cozy_backup:
 
-    setup = Setup()
-    setup.set_up()
+        with DataHandler(DATA) as data_handler:
 
-    cozy_backup = CozyBackup()
-    cozy_backup.set_up()
+            data_handler.create_data()
 
-    data_handler = DataHandler(DATA)
-    data_handler.create_data()
+            for change_number in range(len(data_handler.changes)):
+                cozy_backup.backup_data()
+                data_handler.change_data()
 
-    for change_number in range(len(data_handler.changes)):
-        cozy_backup.backup_data()
-        data_handler.change_data()
+            prev_version_path = DATA
+            for change_number in range(len(data_handler.changes)):
+                data_handler.undo_change_data()
+                prev_version_path = cozy_backup.get_prev_version_path(prev_version_path)
+                data_handler.compare_data_with(prev_version_path)
 
-    prev_version_path = DATA
-    for change_number in range(len(data_handler.changes)):
-        data_handler.undo_change_data()
-        prev_version_path = cozy_backup.get_prev_version_path(prev_version_path)
-        data_handler.compare_data_with(prev_version_path)
+            next_version_path = prev_version_path
+            for change_number in range(len(data_handler.changes)):
+                data_handler.redo_change_data()
+                next_version_path = cozy_backup.get_next_version_path(next_version_path)
+                data_handler.compare_data_with(next_version_path)
 
-    next_version_path = prev_version_path
-    for change_number in range(len(data_handler.changes)):
-        data_handler.redo_change_data()
-        next_version_path = cozy_backup.get_next_version_path(next_version_path)
-        data_handler.compare_data_with(next_version_path)
-
-finally: # clean up in any case!
-    try:
-        data_handler.cleanup()
-    except Exception, e:
-        print str(e)
-    try:
-        cozy_backup.close_restore_mode()
-        cozy_backup.cleanup()
-    except Exception, e:
-        print e
-    try:
-        setup.cleanup_configuration()
-    except Exception, e:
-        print e
-#    clean_tmp_dir()
 
 print '### EXITING SUCCESSFULLY'

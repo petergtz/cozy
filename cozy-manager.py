@@ -13,7 +13,7 @@ import sys
 import dbus
 import dbus.service
 
-import cozy.configuration
+from cozy.configuration import Configuration
 import utils.daemon
 
 class Manager(dbus.service.Object):
@@ -28,7 +28,7 @@ class Manager(dbus.service.Object):
 
         self.filesystems = dict()
         self.backup_provider = backup_provider
-        self.system_bus = dbus.SystemBus()
+        self.system_bus = system_bus
 
         if self.config.backup_volume_removeable:
             self.system_bus.add_signal_receiver(self.on_device_removed, 'DeviceRemoved', 'org.freedesktop.Hal.Manager', 'org.freedesktop.Hal', '/org/freedesktop/Hal/Manager')
@@ -185,7 +185,7 @@ class ManagerDaemon(utils.daemon.Daemon):
 
         DBusGMainLoop(set_as_default=True)
 
-        config = cozy.configuration.Configuration()
+        config = Configuration()
 
         backup_provider = BackupProvider()
 
@@ -215,5 +215,5 @@ if __name__ == '__main__':
             sys.exit(2)
         sys.exit(0)
     else:
-        print "usage: %s start|stop|restart" % sys.argv[0]
+        print "usage: %s start|stop|restart|nodaemon" % sys.argv[0]
         sys.exit(2)

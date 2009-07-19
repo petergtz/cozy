@@ -3,7 +3,12 @@ class Backup(object):
     class MountException(Exception):
         pass
 
+    class ConfigIncompleteException(Exception):
+        pass
+
     def __init__(self, config):
+        if config.backup_id is None or config.full_backup_path is None:
+            raise Backup.ConfigIncompleteException()
         self.backup_path = config.full_backup_path
         self.backup_id = config.backup_id
 
@@ -17,7 +22,7 @@ class Backup(object):
         '''
         mounts a filesystem and returns Backup object that holds its mount point 
         '''
-        self.mount(None)
+        return self.mount(None)
 
     def clone(self, version):
         '''
@@ -29,7 +34,7 @@ class Backup(object):
         '''
         takes a snapshot of the specified filesystem and returns the new version
         '''
-        self.clone(None)
+        return self.clone(None)
 
     def get_previous_versions(self, current_version):
         '''

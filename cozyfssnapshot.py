@@ -34,7 +34,7 @@ def snapshot(target_path, backup_id, based_on_version=None):
 
 	db.commit()
 
-	print version
+	return version
 
 
 if __name__ == '__main__':
@@ -46,4 +46,5 @@ if __name__ == '__main__':
 	else:
 		based_on_version = sys.argv[3]
 
-	snapshot(target_path=sys.argv[1], backup_id=int(sys.argv[2]), based_on_version=int(based_on_version))
+	version = snapshot(target_path=sys.argv[1], backup_id=int(sys.argv[2]), based_on_version=int(based_on_version))
+	print version

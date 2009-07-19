@@ -45,7 +45,9 @@ class CozyFSBackup(Backup):
         self.__temp_mount_dir = None
 
     def __del__(self):
-        self.db.close()
+#        Backup.__del__(self)
+        if hasattr(self, 'db'): # this is necessary because destructor can be called although object not completely initialized
+            self.db.close()
 
 
     def __temp_dir(self):
@@ -82,7 +84,7 @@ class CozyFSBackup(Backup):
         '''
         takes a snapshot of the specified filesystem and returns the new version
         '''
-        snapshot(backup_path, backup_id, version)
+        snapshot(self.backup_path, self.backup_id, version)
 
 
     def __get_latest_version_in_backup(self):
