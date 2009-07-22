@@ -34,8 +34,8 @@ class Shell(object):
 
 class CozyFSBackup(Backup):
 
-    def __init__(self, config, shell=Shell(), db=sqlite3):
-        Backup.__init__(self, config)
+    def __init__(self, backup_path, backup_id, shell=Shell(), db=sqlite3):
+        Backup.__init__(self, backup_path, backup_id)
         self.shell = shell
 
         self.db = db.connect(os.path.join(self.backup_path, DBFILE))

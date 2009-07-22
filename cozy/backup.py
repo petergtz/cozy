@@ -3,14 +3,9 @@ class Backup(object):
     class MountException(Exception):
         pass
 
-    class ConfigIncompleteException(Exception):
-        pass
-
-    def __init__(self, config):
-        if config.backup_id is None or config.full_backup_path is None:
-            raise Backup.ConfigIncompleteException()
-        self.backup_path = config.full_backup_path
-        self.backup_id = config.backup_id
+    def __init__(self, backup_path, backup_id):
+        self.backup_path = backup_path
+        self.backup_id = backup_id
 
     def mount(self, version):
         ''' 

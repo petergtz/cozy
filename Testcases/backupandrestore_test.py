@@ -16,7 +16,8 @@ ROOT_DIR = os.path.join(TC_DIR, '..')
 
 COZY_MKFS_PATH = os.path.join(ROOT_DIR, 'mkfs.cozyfs.py')
 COZY_BACKUP_PATH = os.path.join(ROOT_DIR, 'cozy-backup.py')
-COZY_MANAGER_PATH = os.path.join(ROOT_DIR, 'cozy-manager.py')
+COZY_RESTORE_BACKEND_PATH = os.path.join(ROOT_DIR, 'cozy-restore-backend.py')
+COZY_LOCATION_MANAGER = os.path.join(ROOT_DIR, 'cozy-location-manager.py')
 TEST_DATA = os.path.join(TC_DIR, 'TestData')
 
 DOT_COZY = os.path.expanduser('~/.cozy')
@@ -38,8 +39,8 @@ class Setup:
         config = cozy.configuration.Configuration()
         config.backup_enabled = True
         #config.set_backup_id(BACKUP_ID)
-        config.backup_volume_removeable = False
-        config.full_backup_path = BACKUP_DIR
+        config.backup_location_type = 'absolute_path'
+        config.backup_location_identifier = BACKUP_DIR
         config.data_path = DATA
         config.write()
 
@@ -206,19 +207,29 @@ class DataHandler:
 class CozyBackup:
 
     def __enter__(self):
-        subprocess.call([COZY_MANAGER_PATH, 'start'])
-        if not self.__manager_running():
-            msg = open('/tmp/cozy-manager-stderr').read()
-            os.remove('/tmp/cozy-manager-stderr')
+        subprocess.call([COZY_LOCATION_MANAGER, 'start'])
+        sleep(1)
+        if not self.__manager_running(COZY_LOCATION_MANAGER):
+            msg = open('/tmp/cozy-location-manager-stderr').read()
+            os.remove('/tmp/cozy-location-manager-stderr')
             raise Exception(msg)
 
+        subprocess.call([COZY_RESTORE_BACKEND_PATH, 'start'])
+        sleep(1)
+        if not self.__manager_running(COZY_RESTORE_BACKEND_PATH):
+            msg = open('/tmp/cozy-restore-backend-stderr').read()
+            os.remove('/tmp/cozy-restore-backend-stderr')
+            raise Exception(msg)
+
+
         self.session_bus = dbus.SessionBus()
-        self.manager = self.session_bus.get_object('org.freedesktop.Cozy', '/org/freedesktop/Cozy/Manager')
+        self.manager_object = self.session_bus.get_object('org.freedesktop.Cozy.RestoreBackend', '/org/freedesktop/Cozy/RestoreBackend')
+        self.manager = dbus.Interface(self.manager_object, dbus_interface='org.freedesktop.Cozy.RestoreBackend')
 
         return self
 
-    def __manager_running(self):
-        a = os.system("ps -ef | grep -v grep | grep cozy-manager.py")
+    def __manager_running(self, daemon):
+        a = os.system("ps -ef | grep -v grep | grep " + daemon)
         if a != 0:
             return False
         return True
@@ -234,7 +245,7 @@ class CozyBackup:
 
     def get_prev_version_path(self, path):
         try:
-            prev_version_path = self.manager.get_previous_version_path(path, dbus_interface='org.freedesktop.Cozy.Manager')
+            prev_version_path = self.manager.get_previous_version_path(path)
             print '### PASSED get_pre_version_path'
             return prev_version_path
         except Exception, e:
@@ -242,7 +253,7 @@ class CozyBackup:
 
     def get_next_version_path(self, path):
         try:
-            next_version_path = self.manager.get_next_version_path(path, dbus_interface='org.freedesktop.Cozy.Manager')
+            next_version_path = self.manager.get_next_version_path(path)
             print '### PASSED get_next_version_path'
             return next_version_path
         except Exception, e:
@@ -250,11 +261,12 @@ class CozyBackup:
 
 
     def close_restore_mode(self):
-        self.manager.close_restore_mode(dbus_interface='org.freedesktop.Cozy.Manager')
+        self.manager.close_restore_mode()
 
     def __exit__(self, type, value, traceback):
         self.close_restore_mode()
-        subprocess.call([COZY_MANAGER_PATH, 'stop'])
+        subprocess.call([COZY_RESTORE_BACKEND_PATH, 'stop'])
+        subprocess.call([COZY_LOCATION_MANAGER, 'stop'])
 
 
 with Setup() as setup:

@@ -2,17 +2,9 @@ import sys
 import os
 import shutil
 
-from backup import Backup
-
-
 class Data(object):
-    class ConfigIncompleteException(Exception):
-        pass
-
-    def __init__(self, config):
-        if config.data_path is None:
-            raise Data.ConfigIncompleteException()
-        self.data_path = config.data_path
+    def __init__(self, data_path):
+        self.data_path = data_path
 
     def back_up_to(self, backup):
         filesystem = backup.mount_latest()

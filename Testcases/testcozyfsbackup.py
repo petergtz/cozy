@@ -26,10 +26,6 @@ class CozyFSBackupStubbed(CozyFSBackup):
 def stub(dummy_self=None):
     pass
 
-class FakeConfiguration(object):
-    def __init__(self):
-        self.full_backup_path = '/the/backup/path'
-        self.backup_id = 12345
 
 class MockCursor(object):
 
@@ -72,9 +68,8 @@ class TestCozyFSBackup(unittest.TestCase):
 
     def setUp(self):
         self.shell = FakeShell()
-        self.config = FakeConfiguration()
         self.fake_db_factory = FakeDBFactory
-        self.backup = CozyFSBackupStubbed(self.config, self.shell, self.fake_db_factory)
+        self.backup = CozyFSBackupStubbed('/the/backup/path', 12345 , self.shell, self.fake_db_factory)
         self.expected_mount_point = '/a/tempfile/generated/dir/2009-02-14_00-31-30'
         self.expected_mount_command = 'cozyfs.py /a/tempfile/generated/dir/2009-02-14_00-31-30 -o target_dir=/the/backup/path,backup_id=12345,version=1234567890 -f'
 

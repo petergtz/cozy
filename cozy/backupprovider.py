@@ -2,5 +2,5 @@ import cozyfsbackup
 
 class BackupProvider:
 
-    def get_backup(self, config):
-        return cozyfsbackup.CozyFSBackup(config)
+    def get_backup(self, backup_path, backup_id):
+        return cozyfsbackup.CozyFSBackup(backup_path, backup_id)
