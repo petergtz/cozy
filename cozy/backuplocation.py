@@ -19,8 +19,8 @@ class BackupLocation(dbus.service.Object):
     def unavailable(self):
         pass
 
-#    def connect_to_signal(self, signal_name, handler_function):
-#        pass
+    def connect_to_signal(self, signal_name, handler_function):
+        pass
 
 
 class RemoveableBackupLocation(BackupLocation):
@@ -61,10 +61,10 @@ class RemoveableBackupLocation(BackupLocation):
 
         return True
 
-#    def connect_to_signal(self, signal_name, handler_function):
-#        if not self.handlers.has_key(signal_name):
-#            self.handlers[signal_name] = []
-#        self.handlers[signal_name].append(handler_function)
+    def connect_to_signal(self, signal_name, handler_function):
+        if not self.handlers.has_key(signal_name):
+            self.handlers[signal_name] = []
+        self.handlers[signal_name].append(handler_function)
 
     @dbus.service.signal(dbus_interface='org.freedesktop.Cozy.BackupLocation')
     def available(self):

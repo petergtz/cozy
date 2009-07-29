@@ -4,7 +4,7 @@ import os.path
 class RestoreBackend(dbus.service.Object):
 
 
-    def __init__(self, config, backup_provider, session_bus, backup_location):
+    def __init__(self, config, backup_provider, session_bus, location_manager):
         dbus.service.Object.__init__(self, session_bus, '/org/freedesktop/Cozy/RestoreBackend')
 
         self.config = config
@@ -14,10 +14,10 @@ class RestoreBackend(dbus.service.Object):
         self.filesystems = dict()
         self.backup_provider = backup_provider
 
-        backup_location.connect_to_signal('unavailable', self.__backup_location_unavailable)
-        backup_location.connect_to_signal('available', self.__backup_location_available)
+        self.backup_location = location_manager.get_backup_location()
+        self.backup_location.connect_to_signal('unavailable', self.__backup_location_unavailable)
+        self.backup_location.connect_to_signal('available', self.__backup_location_available)
 
-        self.backup_location = backup_location
 
         self.backup = None
         if self.backup_location.is_available():
