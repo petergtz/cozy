@@ -38,6 +38,10 @@ class CozyRestoreNautilusExtension(nautilus.MenuProvider):
     def go_to_restore_mode(self, menu, file, window):
         cmdline = ['nautilus', file]
         subprocess.Popen(cmdline)
+        if not self.manager.backup_location_available():
+            session_bus = dbus.SessionBus()
+            notifications = session_bus.get_object('org.freedesktop.Notifications', '/org/freedesktop/Notifications')
+            notifications.Notify("", 0, "", "Warning in Cozy Nautilus Extension", 'Backup location is not available', list(), {}, 12000, dbus_interface='org.freedesktop.Notifications')
         self.is_in_restore_mode = True
         window.destroy()
 

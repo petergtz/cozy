@@ -121,8 +121,17 @@ class RestoreBackend(dbus.service.Object):
                          in_signature='s', out_signature='s')
     def get_newest_version_path(self, path):
         relative_path = self.__get_relative_path_of(path)
+        if relative_path == -1: # if we're completely out of the backup data just stay where we are.
+            return path
         newest_path = os.path.join(self.config.data_path, relative_path)
         return newest_path
+
+
+    @dbus.service.method(dbus_interface='org.freedesktop.Cozy.RestoreBackend',
+                         in_signature='', out_signature='b')
+    def backup_location_available(self):
+        return self.backup_location.is_available()
+
 
 
 

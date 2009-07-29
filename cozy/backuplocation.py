@@ -1,4 +1,6 @@
 import dbus.service
+import os.path
+
 
 from utils.md5sum import md5sum_from_string
 
@@ -31,6 +33,9 @@ class RemoveableBackupLocation(BackupLocation):
         self.rel_path = rel_path
         self.system_bus = system_bus
         self.handlers = dict()
+        self.system_bus.add_signal_receiver(self.__on_device_removed, 'DeviceRemoved', 'org.freedesktop.Hal.Manager', 'org.freedesktop.Hal', '/org/freedesktop/Hal/Manager')
+        self.system_bus.add_signal_receiver(self.__on_mount_point_set, 'PropertyModified', 'org.freedesktop.Hal.Device', 'org.freedesktop.Hal', self.uuid)
+
 
     @dbus.service.method(dbus_interface='org.freedesktop.Cozy.BackupLocation',
                          in_signature='', out_signature='s')
@@ -44,7 +49,7 @@ class RemoveableBackupLocation(BackupLocation):
         device = self.system_bus.get_object('org.freedesktop.Hal', device_name)
         mount_point = device.GetPropertyString('volume.mount_point', dbus_interface='org.freedesktop.Hal.Device')
 
-        return mount_point
+        return os.path.join(mount_point, self.rel_path)
 
     @dbus.service.method(dbus_interface='org.freedesktop.Cozy.BackupLocation',
                          in_signature='', out_signature='b')
@@ -87,8 +92,6 @@ class RemoveableBackupLocation(BackupLocation):
     def __on_device_removed(self, udi):
         if udi == self.uuid:
             self.unavailable()
-
-import os.path
 
 class PathBasedBackupLocation(BackupLocation):
     def __init__(self, path, session_bus):

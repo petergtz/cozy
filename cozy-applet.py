@@ -23,9 +23,12 @@ import sys
 import os
 import time
 
+from cozy.locationmanager import LocationManager
+from cozy.configuration import Configuration
+
 ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
 COZY_BACKUP_PATH = os.path.join(ROOT_DIR, 'cozy-backup.py')
-COZY_MANAGER_PATH = os.path.join(ROOT_DIR, 'cozy-manager.py')
+#COZY_MANAGER_PATH = os.path.join(ROOT_DIR, 'cozy-manager.py')
 COZY_CONFIGDLG_PATH = os.path.join(ROOT_DIR, 'cozy-configdialog.py')
 COZY_ICON_PATH = os.path.join(ROOT_DIR, 'Icon/cozy.svg')
 
@@ -66,10 +69,17 @@ class CozyIcon(gtk.StatusIcon):
         self.connect_object("popup-menu", CozyIcon.on_popup_menu, self)
         self.set_from_file(COZY_ICON_PATH)
 
+        system_bus = dbus.SystemBus()
         session_bus = dbus.SessionBus()
+
         session_bus.add_signal_receiver(self.make_visible, 'removeable_volume_connected_signal', 'org.freedesktop.Cozy.Manager', 'org.freedesktop.Cozy', '/org/freedesktop/Cozy/Manager')
         session_bus.add_signal_receiver(self.make_invisible, 'removeable_volume_disconnected_signal', 'org.freedesktop.Cozy.Manager', 'org.freedesktop.Cozy', '/org/freedesktop/Cozy/Manager')
 
+        config = Configuration()
+        self.location_manager = LocationManager(config, session_bus, system_bus)
+        self.backup_location = self.location_manager.get_backup_location()
+        self.backup_location.connect_to_signal('available', self.make_visible)
+        self.backup_location.connect_to_signal('unavailable', self.make_invisible)
         # if manager not started
         #     start manager
         #     if manager start not successful due to incomplete configuration
@@ -82,13 +92,13 @@ class CozyIcon(gtk.StatusIcon):
         #                abort
         #        
 
-        os.system(COZY_MANAGER_PATH + ' start')
-        time.sleep(2)
-        try:
-            manager = session_bus.get_object('org.freedesktop.Cozy', '/org/freedesktop/Cozy/Manager')
-        except dbus.exceptions.DBusException, e:
-            self.on_show_configuration_dlg(self)
-            return
+#        os.system(COZY_MANAGER_PATH + ' start')
+#        time.sleep(2)
+#        try:
+#            manager = session_bus.get_object('org.freedesktop.Cozy', '/org/freedesktop/Cozy/Manager')
+#        except dbus.exceptions.DBusException, e:
+#            self.on_show_configuration_dlg(self)
+#            return
 #            if process.poll() == 1:
 #                self.on_show_configuration_dlg(self)
 #                return
@@ -103,8 +113,9 @@ class CozyIcon(gtk.StatusIcon):
             # actually applet should start even if manager is not running. but it should somehow tell the user that it is not running
             # or it should give the possiblity to start it. think about a good solution.
 
-        manager = session_bus.get_object('org.freedesktop.Cozy', '/org/freedesktop/Cozy/Manager')
-        self.set_visible(manager.is_backup_volume_connected(dbus_interface='org.freedesktop.Cozy.Manager'))
+        #manager = session_bus.get_object('org.freedesktop.Cozy', '/org/freedesktop/Cozy/Manager')
+#        self.set_visible(manager.is_backup_volume_connected(dbus_interface='org.freedesktop.Cozy.Manager'))
+        self.set_visible(self.backup_location.is_available())
 
     def make_visible(self):
         self.set_visible(True)

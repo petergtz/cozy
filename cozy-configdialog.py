@@ -58,8 +58,8 @@ class ConfigMediator:
         else:
             self.source_path_label.set_text('Not configured')
 
-        if self.config.backup_volume_removeable is not None:
-            if self.config.backup_volume_removeable:
+        if self.config.backup_location_type is not None:
+            if self.config.backup_location_type == 'removeable_volume':
                 self.temp_radio.set_active(True)
                 if self.config.backup_volume_uuid is not None and self.config.relative_backup_path is not None:
                     self.volume_name_label.set_text(self.config.backup_volume_uuid)
