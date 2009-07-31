@@ -7,6 +7,8 @@ import pygtk
 pygtk.require('2.0')
 import gtk
 
+from dbus.mainloop.glib import DBusGMainLoop
+
 from  cozy.configuration import Configuration
 
 import subprocess
@@ -14,9 +16,13 @@ import time
 
 import re
 
+from cozy.backuplocation import PathBasedBackupLocation, RemoveableBackupLocation
+from cozy.locationmanager import LocationManager
+import dbus
+
 ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
 COZY_MKFS_PATH = os.path.join(ROOT_DIR, 'mkfs.cozyfs.py')
-COZY_MANAGER_PATH = os.path.join(ROOT_DIR, 'cozy-manager.py')
+COZY_MANAGER_PATH = os.path.join(ROOT_DIR, 'cozy-restore-backend.py')
 COZY_APPLET_PATH = os.path.join(ROOT_DIR, 'cozy-applet.py')
 BUILDER_XML_PATH = os.path.join(ROOT_DIR, 'configuration_dialog.xml')
 
@@ -58,19 +64,24 @@ class ConfigMediator:
         else:
             self.source_path_label.set_text('Not configured')
 
+        identifier = self.config.backup_location_identifier
         if self.config.backup_location_type is not None:
             if self.config.backup_location_type == 'removeable_volume':
                 self.temp_radio.set_active(True)
-                if self.config.backup_volume_uuid is not None and self.config.relative_backup_path is not None:
-                    self.volume_name_label.set_text(self.config.backup_volume_uuid)
-                    self.relative_path_label.set_text(self.config.relative_backup_path)
+                if identifier is not None:
+                    uuid, rel_path = identifier.split(':')
+                    self.volume_name_label.set_text(uuid)
+                    self.relative_path_label.set_text(rel_path)
+#                if self.config.backup_volume_uuid is not None and self.config.relative_backup_path is not None:
+#                    self.volume_name_label.set_text(self.config.backup_volume_uuid)
+#                    self.relative_path_label.set_text(self.config.relative_backup_path)
                 else:
                     self.volume_name_label.set_text('Not configured')
                     self.relative_path_label.set_text('Not configured')
             else:
                 self.permanent_radio.set_active(True)
-                if self.config.full_backup_path is not None:
-                    self.absolute_path_label.set_text(self.config.full_backup_path)
+                if identifier is not None:
+                    self.absolute_path_label.set_text(identifier)
                 else:
                     self.absolute_path_label.set_text('Not configured')
         else:
@@ -94,7 +105,8 @@ class ConfigMediator:
 
     def on_permanent_mode_changed(self, widget, data=None):
         if widget.get_active():
-            self.config.backup_volume_removeable = False
+#            self.config.backup_volume_removeable = False
+            self.config.backup_location_type = 'absolute_path'
 #            self.config.set_full_target_path(target_chooser.get_filename())
             self.permanent_group.set_sensitive(True)
         else:
@@ -102,7 +114,8 @@ class ConfigMediator:
 
     def on_temporary_mode_changed(self, widget, data=None):
         if widget.get_active():
-            self.config.backup_volume_removeable = True
+#            self.config.backup_volume_removeable = True
+            self.config.backup_location_type = 'removeable_volume'
 #            self.config.set_full_target_path(target_chooser.get_filename())
             self.temp_group.set_sensitive(True)
         else:
@@ -112,8 +125,10 @@ class ConfigMediator:
         dlg = gtk.FileChooserDialog(action=gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
                                     buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_OPEN, gtk.RESPONSE_OK))
         if dlg.run() == gtk.RESPONSE_OK:
-            self.config.full_backup_path = dlg.get_filename()
-            self.absolute_path_label.set_text(dlg.get_filename())
+#            self.config.full_backup_path = dlg.get_filename()
+            backup_location = PathBasedBackupLocation(dlg.get_filename())
+            self.config.backup_location_identifier = backup_location.serialize()
+            self.absolute_path_label.set_text(backup_location.path)
         dlg.destroy()
 
 
@@ -122,10 +137,13 @@ class ConfigMediator:
                                     buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_OPEN, gtk.RESPONSE_OK))
         if dlg.run() == gtk.RESPONSE_OK:
 #            self.source_path_label.set_text(dlg.get_filename())
-            self.config.full_backup_path = dlg.get_filename()
+
+#            self.config.full_backup_path = dlg.get_filename()
+            backup_location = RemoveableBackupLocation(arbitrary_path=dlg.get_filename())
+            self.config.backup_location_identifier = backup_location.serialize()
  #           self.config.set_source_path(dlg.get_filename())
-            self.volume_name_label.set_text(self.config.backup_volume_uuid)
-            self.relative_path_label.set_text(self.config.relative_backup_path)
+            self.volume_name_label.set_text(backup_location.uuid)
+            self.relative_path_label.set_text(backup_location.rel_path)
         dlg.destroy()
 
     def on_reset(self, widget, data=None):
@@ -158,7 +176,7 @@ class ConfigMediator:
                 self.__remove_crontab_entry()
                 return False
 
-            if self.config.full_backup_path is None or self.config.data_path is None:
+            if self.config.backup_location_identifier is None or self.config.data_path is None:
                 dialog = builder.get_object("config_not_complete_confirmation_dialog")
                 result = dialog.run()
                 dialog.hide()
@@ -169,7 +187,9 @@ class ConfigMediator:
                     self.config.backup_enabled = False
                     return self.delete_event(widget, event, data)
 
-            subprocess.call([COZY_MKFS_PATH, self.config.full_backup_path, str(self.config.backup_id)])
+            location_manager = LocationManager(self.config, dbus.SystemBus())
+            backup_location = location_manager.get_backup_location()
+            subprocess.call([COZY_MKFS_PATH, backup_location.get_path(), str(self.config.backup_id)])
             if self.permanent_radio.get_active():
                 self.__add_crontab_entry()
                 self.__stop_applet()
@@ -229,6 +249,8 @@ class ConfigMediator:
 
 
 if __name__ == "__main__":
+    DBusGMainLoop(set_as_default=True)
+
     builder = gtk.Builder()
     builder.add_from_file(BUILDER_XML_PATH)
 

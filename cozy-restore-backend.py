@@ -30,7 +30,7 @@ class ManagerDaemon(utils.daemon.Daemon):
 
         name = dbus.service.BusName('org.freedesktop.Cozy.RestoreBackend', session_bus)
 
-        location_manager = LocationManager(config, session_bus, system_bus)
+        location_manager = LocationManager(config, system_bus)
 
 #        location_manager = session_bus.get_object('org.freedesktop.Cozy.LocationManager', '/org/freedesktop/Cozy/LocationManager')
 

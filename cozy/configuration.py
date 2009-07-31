@@ -75,13 +75,13 @@ class Configuration(object):
         self.backup_location_identifier_changed = self.backup_location_identifier != value
         self.parser.set('backup_location', 'location_identifier', value)
 
-    def __get_backup_location_name(self):
-        try:
-            location_identifier = self.parser.get('backup_location', 'location_identifier')
-#            return '/org/freedesktop/Cozy/BackupLocations/' + location_identifier.replace('/', '_').replace(':', '_')
-            return '/org/freedesktop/Cozy/BackupLocations/' + md5sum_from_string(location_identifier)
-        except ConfigParser.Error, e:
-            None
+#    def __get_backup_location_name(self):
+#        try:
+#            location_identifier = self.parser.get('backup_location', 'location_identifier')
+##            return '/org/freedesktop/Cozy/BackupLocations/' + location_identifier.replace('/', '_').replace(':', '_')
+#            return '/org/freedesktop/Cozy/BackupLocations/' + md5sum_from_string(location_identifier)
+#        except ConfigParser.Error, e:
+#            None
 
     def __get_backup_location_type(self):
         try:
@@ -101,5 +101,5 @@ class Configuration(object):
     backup_id = property(__get_backup_id, __set_backup_id)
 
     backup_location_type = property(__get_backup_location_type, __set_backup_location_type)
-    backup_location_name = property(__get_backup_location_name)
+#    backup_location_name = property(__get_backup_location_name)
     backup_location_identifier = property(__get_backup_location_identifier, __set_backup_location_identifier)

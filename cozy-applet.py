@@ -76,7 +76,7 @@ class CozyIcon(gtk.StatusIcon):
         session_bus.add_signal_receiver(self.make_invisible, 'removeable_volume_disconnected_signal', 'org.freedesktop.Cozy.Manager', 'org.freedesktop.Cozy', '/org/freedesktop/Cozy/Manager')
 
         config = Configuration()
-        self.location_manager = LocationManager(config, session_bus, system_bus)
+        self.location_manager = LocationManager(config, system_bus)
         self.backup_location = self.location_manager.get_backup_location()
         self.backup_location.connect_to_signal('available', self.make_visible)
         self.backup_location.connect_to_signal('unavailable', self.make_invisible)
