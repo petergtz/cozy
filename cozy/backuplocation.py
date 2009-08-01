@@ -1,14 +1,6 @@
-#import dbus.service
 import os.path
-import dbus
 
-
-#from utils.md5sum import md5sum_from_string
-
-class BackupLocation(object):#dbus.service.Object):
-
-#    def __init__(self, session_bus, object_path):
-#        dbus.service.Object.__init__(self, session_bus, object_path)
+class BackupLocation(object):
 
     def get_path(self):
         pass
@@ -31,13 +23,8 @@ class BackupLocation(object):#dbus.service.Object):
 
 class RemoveableBackupLocation(BackupLocation):
 
-#    def __init__(self, uuid, rel_path, session_bus, system_bus):
-    def __init__(self, uuid=None, rel_path=None, arbitrary_path=None, system_bus=None):
-#        BackupLocation.__init__(self, session_bus, '/org/freedesktop/Cozy/BackupLocations/' + md5sum_from_string(uuid + ':' + rel_path))
-        if system_bus is None:
-            self.system_bus = dbus.SystemBus()
-        else:
-            self.system_bus = system_bus
+    def __init__(self, system_bus, uuid=None, rel_path=None, arbitrary_path=None):
+        self.system_bus = system_bus
 
         if arbitrary_path is not None:
             self.uuid, self.rel_path = self.__get_identifiers_from(arbitrary_path)
@@ -66,8 +53,7 @@ class RemoveableBackupLocation(BackupLocation):
     def serialize(self):
         return self.uuid + ':' + self.rel_path
 
-#    @dbus.service.method(dbus_interface='org.freedesktop.Cozy.BackupLocation',
-#                         in_signature='', out_signature='s')
+
     def get_path(self):
         if not self.is_available():
             raise Exception('Backup locaiton is not available')
@@ -80,8 +66,7 @@ class RemoveableBackupLocation(BackupLocation):
 
         return os.path.join(mount_point, self.rel_path)
 
-#    @dbus.service.method(dbus_interface='org.freedesktop.Cozy.BackupLocation',
-#                         in_signature='', out_signature='b')
+
     def is_available(self):
         manager = self.system_bus.get_object('org.freedesktop.Hal', '/org/freedesktop/Hal/Manager')
         devices = manager.FindDeviceStringMatch('info.udi', self.uuid, dbus_interface='org.freedesktop.Hal.Manager')
@@ -100,13 +85,13 @@ class RemoveableBackupLocation(BackupLocation):
             self.handlers[signal_name] = []
         self.handlers[signal_name].append(handler_function)
 
-#    @dbus.service.signal(dbus_interface='org.freedesktop.Cozy.BackupLocation')
+
     def available(self):
         if self.handlers.has_key('available'):
             for func in self.handlers['available']:
                 func()
 
-#    @dbus.service.signal(dbus_interface='org.freedesktop.Cozy.BackupLocation')
+
     def unavailable(self):
         if self.handlers.has_key('unavailable'):
             for func in self.handlers['unavailable']:
@@ -122,22 +107,20 @@ class RemoveableBackupLocation(BackupLocation):
         if udi == self.uuid:
             self.unavailable()
 
+
 class PathBasedBackupLocation(BackupLocation):
-#    def __init__(self, path, session_bus):
+
     def __init__(self, path):
-#        BackupLocation.__init__(self, session_bus, '/org/freedesktop/Cozy/BackupLocations/' + md5sum_from_string(path))
         self.path = path
 
 
-#    @dbus.service.method(dbus_interface='org.freedesktop.Cozy.BackupLocation',
-#                         in_signature='', out_signature='s')
     def get_path(self):
         return self.path
 
-#    @dbus.service.method(dbus_interface='org.freedesktop.Cozy.BackupLocation',
-#                         in_signature='', out_signature='b')
+
     def is_available(self):
         return os.path.lexists(self.path)
+
 
     def serialize(self):
         return self.path

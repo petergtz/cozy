@@ -24,7 +24,7 @@ class LocationDaemon(utils.daemon.Daemon):
         session_bus = dbus.SessionBus()
         system_bus = dbus.SystemBus()
 
-        name = dbus.service.BusName("org.freedesktop.Cozy.LocationManager", session_bus)
+#        name = dbus.service.BusName("org.freedesktop.Cozy.LocationManager", session_bus)
         location_manager = LocationManager(config, session_bus, system_bus)
 
 

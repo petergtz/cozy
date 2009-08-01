@@ -32,11 +32,6 @@ class ManagerDaemon(utils.daemon.Daemon):
 
         location_manager = LocationManager(config, system_bus)
 
-#        location_manager = session_bus.get_object('org.freedesktop.Cozy.LocationManager', '/org/freedesktop/Cozy/LocationManager')
-
-#        backup_location_object = session_bus.get_object('org.freedesktop.Cozy.LocationManager', location_manager.get_backup_location(dbus_interface='org.freedesktop.Cozy.LocationManager'))
-#        backup_location = dbus.Interface(backup_location_object, dbus_interface='org.freedesktop.Cozy.BackupLocation')
-
         restore_backend = RestoreBackend(config, backup_provider, session_bus, location_manager)
 
         mainloop = gobject.MainLoop()

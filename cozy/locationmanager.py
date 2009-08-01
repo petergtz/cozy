@@ -12,7 +12,7 @@ class LocationManager(object):#dbus.service.Object):
             self.backup_location = PathBasedBackupLocation(config.backup_location_identifier)
         elif config.backup_location_type == 'removeable_volume':
             uuid, rel_path = config.backup_location_identifier.split(':')
-            self.backup_location = RemoveableBackupLocation(uuid, rel_path, system_bus=system_bus)
+            self.backup_location = RemoveableBackupLocation(system_bus, uuid, rel_path)
         else:
             raise Exception('Unknown location type.')
 

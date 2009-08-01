@@ -21,7 +21,7 @@ class RestoreBackend(dbus.service.Object):
 
         self.backup = None
         if self.backup_location.is_available():
-            self.backup = self.backup_provider.get_backup(self.backup_location.get_path(), self.config.backup_id)
+            self.backup = self.backup_provider.get_backup(self.backup_location.get_path(), self.config)
 
 
     def __backup_location_available(self):

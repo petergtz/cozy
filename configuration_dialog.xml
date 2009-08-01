@@ -10,289 +10,64 @@
     <signal name="destroy" handler="destroy"/>
     <signal name="delete_event" handler="delete_event"/>
     <child>
-      <object class="GtkVBox" id="main_separation">
+      <object class="GtkVBox" id="vbox1">
         <property name="visible">True</property>
         <child>
-          <object class="GtkCheckButton" id="enable_checkbox">
-            <property name="label" translatable="yes">Enable Backup</property>
+          <object class="GtkNotebook" id="notebook2">
             <property name="visible">True</property>
             <property name="can_focus">True</property>
-            <property name="receives_default">False</property>
-            <property name="tooltip_markup">asdasdsad &lt;b&gt;kjkjkjh&lt;/b&gt;q</property>
-            <property name="draw_indicator">True</property>
-            <signal name="toggled" handler="on_backup_enable"/>
-          </object>
-          <packing>
-            <property name="expand">False</property>
-            <property name="padding">10</property>
-            <property name="position">0</property>
-          </packing>
-        </child>
-        <child>
-          <object class="GtkVBox" id="global_sections">
-            <property name="visible">True</property>
-            <property name="sensitive">False</property>
             <child>
-              <object class="GtkFrame" id="locations">
+              <object class="GtkVBox" id="main_separation">
                 <property name="visible">True</property>
-                <property name="label_xalign">0</property>
-                <property name="shadow_type">none</property>
                 <child>
-                  <object class="GtkAlignment" id="locations_alignment">
+                  <object class="GtkCheckButton" id="enable_checkbox">
+                    <property name="label" translatable="yes">Enable Backup</property>
                     <property name="visible">True</property>
-                    <property name="left_padding">12</property>
-                    <child>
-                      <object class="GtkVBox" id="vbox4">
-                        <property name="visible">True</property>
-                        <child>
-                          <object class="GtkHBox" id="hbox3">
-                            <property name="visible">True</property>
-                            <child>
-                              <object class="GtkLabel" id="label1">
-                                <property name="visible">True</property>
-                                <property name="xalign">0</property>
-                                <property name="label" translatable="yes">Source Path:</property>
-                              </object>
-                              <packing>
-                                <property name="position">0</property>
-                              </packing>
-                            </child>
-                            <child>
-                              <object class="GtkLabel" id="source_path_label">
-                                <property name="visible">True</property>
-                                <property name="xalign">0</property>
-                                <property name="label" translatable="yes">Source path not set</property>
-                                <property name="width_chars">40</property>
-                              </object>
-                              <packing>
-                                <property name="position">1</property>
-                              </packing>
-                            </child>
-                          </object>
-                          <packing>
-                            <property name="position">0</property>
-                          </packing>
-                        </child>
-                        <child>
-                          <object class="GtkAspectFrame" id="aspectframe2">
-                            <property name="visible">True</property>
-                            <property name="label_xalign">0</property>
-                            <property name="shadow_type">none</property>
-                            <property name="xalign">0</property>
-                            <child>
-                              <object class="GtkButton" id="choose_source_btn">
-                                <property name="label" translatable="yes">Choose Source Path...</property>
-                                <property name="visible">True</property>
-                                <property name="can_focus">True</property>
-                                <property name="receives_default">True</property>
-                                <signal name="clicked" handler="on_choose_source_btn_clicked"/>
-                              </object>
-                            </child>
-                          </object>
-                          <packing>
-                            <property name="position">1</property>
-                          </packing>
-                        </child>
-                      </object>
-                    </child>
+                    <property name="can_focus">True</property>
+                    <property name="receives_default">False</property>
+                    <property name="draw_indicator">True</property>
+                    <signal name="toggled" handler="on_backup_enable"/>
                   </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="padding">10</property>
+                    <property name="position">0</property>
+                  </packing>
                 </child>
-                <child type="label">
-                  <object class="GtkLabel" id="label4">
-                    <property name="visible">True</property>
-                    <property name="ypad">7</property>
-                    <property name="label" translatable="yes">&lt;b&gt;Source Location&lt;/b&gt;</property>
-                    <property name="use_markup">True</property>
-                  </object>
-                </child>
-              </object>
-              <packing>
-                <property name="position">0</property>
-              </packing>
-            </child>
-            <child>
-              <object class="GtkFrame" id="mode_of_operation1">
-                <property name="visible">True</property>
-                <property name="label_xalign">0</property>
-                <property name="shadow_type">none</property>
                 <child>
-                  <object class="GtkAlignment" id="alignment2">
+                  <object class="GtkVBox" id="global_sections">
                     <property name="visible">True</property>
-                    <property name="left_padding">12</property>
+                    <property name="sensitive">False</property>
                     <child>
-                      <object class="GtkVBox" id="vbox1">
+                      <object class="GtkFrame" id="locations">
                         <property name="visible">True</property>
-                        <property name="spacing">6</property>
+                        <property name="label_xalign">0</property>
+                        <property name="shadow_type">none</property>
                         <child>
-                          <object class="GtkRadioButton" id="permanent_radio">
-                            <property name="label" translatable="yes">Backup volume is permanently connected to the computer</property>
+                          <object class="GtkAlignment" id="locations_alignment">
                             <property name="visible">True</property>
-                            <property name="can_focus">True</property>
-                            <property name="receives_default">False</property>
-                            <property name="active">True</property>
-                            <property name="draw_indicator">True</property>
-                            <signal name="toggled" handler="on_permanent_mode_changed"/>
-                          </object>
-                          <packing>
-                            <property name="expand">False</property>
-                            <property name="fill">False</property>
-                            <property name="position">0</property>
-                          </packing>
-                        </child>
-                        <child>
-                          <object class="GtkAlignment" id="permanent_group">
-                            <property name="visible">True</property>
-                            <property name="left_padding">40</property>
+                            <property name="left_padding">12</property>
                             <child>
-                              <object class="GtkVBox" id="vbox2">
+                              <object class="GtkVBox" id="vbox4">
                                 <property name="visible">True</property>
                                 <child>
-                                  <object class="GtkHBox" id="hbox1">
-                                    <property name="visible">True</property>
-                                    <child>
-                                      <object class="GtkLabel" id="label3">
-                                        <property name="visible">True</property>
-                                        <property name="xalign">0</property>
-                                        <property name="label" translatable="yes">Absolute Path:</property>
-                                      </object>
-                                      <packing>
-                                        <property name="position">0</property>
-                                      </packing>
-                                    </child>
-                                    <child>
-                                      <object class="GtkLabel" id="absolute_path_label">
-                                        <property name="visible">True</property>
-                                        <property name="xalign">0</property>
-                                        <property name="label" translatable="yes">Not Set</property>
-                                        <property name="width_chars">40</property>
-                                      </object>
-                                      <packing>
-                                        <property name="position">1</property>
-                                      </packing>
-                                    </child>
-                                  </object>
-                                  <packing>
-                                    <property name="padding">3</property>
-                                    <property name="position">0</property>
-                                  </packing>
-                                </child>
-                                <child>
-                                  <object class="GtkAspectFrame" id="aspectframe3">
-                                    <property name="visible">True</property>
-                                    <property name="label_xalign">0</property>
-                                    <property name="shadow_type">none</property>
-                                    <property name="xalign">0</property>
-                                    <child>
-                                      <object class="GtkButton" id="choose_permanent_target_btn">
-                                        <property name="label" translatable="yes">Choose Target Path...</property>
-                                        <property name="visible">True</property>
-                                        <property name="can_focus">True</property>
-                                        <property name="receives_default">True</property>
-                                        <signal name="clicked" handler="on_choose_permanent_target_btn_clicked"/>
-                                      </object>
-                                    </child>
-                                  </object>
-                                  <packing>
-                                    <property name="position">1</property>
-                                  </packing>
-                                </child>
-                                <child>
-                                  <object class="GtkLabel" id="label5">
-                                    <property name="visible">True</property>
-                                    <property name="xalign">0</property>
-                                    <property name="yalign">0</property>
-                                    <property name="label" translatable="yes">&lt;i&gt;In this case an automatic backup is made every hour.&lt;/i&gt;</property>
-                                    <property name="use_markup">True</property>
-                                    <property name="wrap">True</property>
-                                  </object>
-                                  <packing>
-                                    <property name="expand">False</property>
-                                    <property name="fill">False</property>
-                                    <property name="padding">10</property>
-                                    <property name="position">2</property>
-                                  </packing>
-                                </child>
-                              </object>
-                            </child>
-                          </object>
-                          <packing>
-                            <property name="position">1</property>
-                          </packing>
-                        </child>
-                        <child>
-                          <object class="GtkRadioButton" id="temp_radio">
-                            <property name="label" translatable="yes">Backup volume is only temporarily connected to the computer</property>
-                            <property name="visible">True</property>
-                            <property name="can_focus">True</property>
-                            <property name="receives_default">False</property>
-                            <property name="draw_indicator">True</property>
-                            <property name="group">permanent_radio</property>
-                            <signal name="toggled" handler="on_temporary_mode_changed"/>
-                          </object>
-                          <packing>
-                            <property name="expand">False</property>
-                            <property name="fill">False</property>
-                            <property name="padding">2</property>
-                            <property name="position">2</property>
-                          </packing>
-                        </child>
-                        <child>
-                          <object class="GtkAlignment" id="temp_group">
-                            <property name="visible">True</property>
-                            <property name="left_padding">40</property>
-                            <child>
-                              <object class="GtkVBox" id="vbox3">
-                                <property name="visible">True</property>
-                                <property name="spacing">7</property>
-                                <child>
-                                  <object class="GtkHBox" id="hbox2">
-                                    <property name="visible">True</property>
-                                    <child>
-                                      <object class="GtkLabel" id="label7">
-                                        <property name="visible">True</property>
-                                        <property name="xalign">0</property>
-                                        <property name="label" translatable="yes">Volume Name:</property>
-                                        <property name="width_chars">20</property>
-                                      </object>
-                                      <packing>
-                                        <property name="position">0</property>
-                                      </packing>
-                                    </child>
-                                    <child>
-                                      <object class="GtkLabel" id="volume_name_label">
-                                        <property name="visible">True</property>
-                                        <property name="xalign">0</property>
-                                        <property name="label" translatable="yes">not set</property>
-                                        <property name="width_chars">40</property>
-                                      </object>
-                                      <packing>
-                                        <property name="position">1</property>
-                                      </packing>
-                                    </child>
-                                  </object>
-                                  <packing>
-                                    <property name="position">0</property>
-                                  </packing>
-                                </child>
-                                <child>
-                                  <object class="GtkHBox" id="hbox4">
+                                  <object class="GtkHBox" id="hbox3">
                                     <property name="visible">True</property>
                                     <child>
                                       <object class="GtkLabel" id="label10">
                                         <property name="visible">True</property>
                                         <property name="xalign">0</property>
-                                        <property name="label" translatable="yes">Relative Path on Volume:</property>
-                                        <property name="width_chars">20</property>
+                                        <property name="label" translatable="yes">Path of data to be backed up:</property>
                                       </object>
                                       <packing>
                                         <property name="position">0</property>
                                       </packing>
                                     </child>
                                     <child>
-                                      <object class="GtkLabel" id="relative_path_label">
+                                      <object class="GtkLabel" id="source_path_label">
                                         <property name="visible">True</property>
                                         <property name="xalign">0</property>
-                                        <property name="label" translatable="yes">not set</property>
+                                        <property name="label" translatable="yes">Source path not set</property>
                                         <property name="width_chars">40</property>
                                       </object>
                                       <packing>
@@ -301,38 +76,276 @@
                                     </child>
                                   </object>
                                   <packing>
-                                    <property name="position">1</property>
+                                    <property name="position">0</property>
                                   </packing>
                                 </child>
                                 <child>
-                                  <object class="GtkAspectFrame" id="aspectframe4">
+                                  <object class="GtkAspectFrame" id="aspectframe2">
                                     <property name="visible">True</property>
                                     <property name="label_xalign">0</property>
                                     <property name="shadow_type">none</property>
                                     <property name="xalign">0</property>
                                     <child>
-                                      <object class="GtkButton" id="choose_temp_target_btn">
-                                        <property name="label" translatable="yes">Choose Path on Volume...</property>
+                                      <object class="GtkButton" id="choose_source_btn">
+                                        <property name="label" translatable="yes">Choose Source Path...</property>
                                         <property name="visible">True</property>
                                         <property name="can_focus">True</property>
                                         <property name="receives_default">True</property>
-                                        <signal name="clicked" handler="on_choose_temp_target_btn_clicked"/>
+                                        <signal name="clicked" handler="on_choose_source_btn_clicked"/>
                                       </object>
                                     </child>
                                   </object>
                                   <packing>
+                                    <property name="position">1</property>
+                                  </packing>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child type="label">
+                          <object class="GtkLabel" id="label11">
+                            <property name="visible">True</property>
+                            <property name="ypad">7</property>
+                            <property name="label" translatable="yes">&lt;b&gt;Data Location&lt;/b&gt;</property>
+                            <property name="use_markup">True</property>
+                          </object>
+                        </child>
+                      </object>
+                      <packing>
+                        <property name="position">0</property>
+                      </packing>
+                    </child>
+                    <child>
+                      <object class="GtkFrame" id="mode_of_operation1">
+                        <property name="visible">True</property>
+                        <property name="label_xalign">0</property>
+                        <property name="shadow_type">none</property>
+                        <child>
+                          <object class="GtkAlignment" id="alignment2">
+                            <property name="visible">True</property>
+                            <property name="left_padding">12</property>
+                            <child>
+                              <object class="GtkVBox" id="vbox2">
+                                <property name="visible">True</property>
+                                <property name="spacing">6</property>
+                                <child>
+                                  <object class="GtkRadioButton" id="permanent_radio">
+                                    <property name="label" translatable="yes">Backup volume is permanently connected to the computer</property>
+                                    <property name="visible">True</property>
+                                    <property name="can_focus">True</property>
+                                    <property name="receives_default">False</property>
+                                    <property name="active">True</property>
+                                    <property name="draw_indicator">True</property>
+                                    <signal name="toggled" handler="on_permanent_mode_changed"/>
+                                  </object>
+                                  <packing>
+                                    <property name="expand">False</property>
+                                    <property name="fill">False</property>
+                                    <property name="position">0</property>
+                                  </packing>
+                                </child>
+                                <child>
+                                  <object class="GtkAlignment" id="permanent_group">
+                                    <property name="visible">True</property>
+                                    <property name="left_padding">40</property>
+                                    <child>
+                                      <object class="GtkVBox" id="vbox3">
+                                        <property name="visible">True</property>
+                                        <child>
+                                          <object class="GtkHBox" id="hbox1">
+                                            <property name="visible">True</property>
+                                            <child>
+                                              <object class="GtkLabel" id="label12">
+                                                <property name="visible">True</property>
+                                                <property name="xalign">0</property>
+                                                <property name="label" translatable="yes">Absolute Path:</property>
+                                              </object>
+                                              <packing>
+                                                <property name="position">0</property>
+                                              </packing>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="absolute_path_label">
+                                                <property name="visible">True</property>
+                                                <property name="xalign">0</property>
+                                                <property name="label" translatable="yes">Not Set</property>
+                                                <property name="width_chars">40</property>
+                                              </object>
+                                              <packing>
+                                                <property name="position">1</property>
+                                              </packing>
+                                            </child>
+                                          </object>
+                                          <packing>
+                                            <property name="padding">3</property>
+                                            <property name="position">0</property>
+                                          </packing>
+                                        </child>
+                                        <child>
+                                          <object class="GtkAspectFrame" id="aspectframe3">
+                                            <property name="visible">True</property>
+                                            <property name="label_xalign">0</property>
+                                            <property name="shadow_type">none</property>
+                                            <property name="xalign">0</property>
+                                            <child>
+                                              <object class="GtkButton" id="choose_permanent_target_btn">
+                                                <property name="label" translatable="yes">Choose Target Path...</property>
+                                                <property name="visible">True</property>
+                                                <property name="can_focus">True</property>
+                                                <property name="receives_default">True</property>
+                                                <signal name="clicked" handler="on_choose_permanent_target_btn_clicked"/>
+                                              </object>
+                                            </child>
+                                          </object>
+                                          <packing>
+                                            <property name="position">1</property>
+                                          </packing>
+                                        </child>
+                                        <child>
+                                          <object class="GtkLabel" id="label13">
+                                            <property name="visible">True</property>
+                                            <property name="xalign">0</property>
+                                            <property name="yalign">0</property>
+                                            <property name="label" translatable="yes">&lt;i&gt;In this case an automatic backup is made every hour.&lt;/i&gt;</property>
+                                            <property name="use_markup">True</property>
+                                            <property name="wrap">True</property>
+                                          </object>
+                                          <packing>
+                                            <property name="expand">False</property>
+                                            <property name="fill">False</property>
+                                            <property name="padding">10</property>
+                                            <property name="position">2</property>
+                                          </packing>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
+                                  <packing>
+                                    <property name="position">1</property>
+                                  </packing>
+                                </child>
+                                <child>
+                                  <object class="GtkRadioButton" id="temp_radio">
+                                    <property name="label" translatable="yes">Backup volume is only temporarily connected to the computer</property>
+                                    <property name="visible">True</property>
+                                    <property name="can_focus">True</property>
+                                    <property name="receives_default">False</property>
+                                    <property name="draw_indicator">True</property>
+                                    <property name="group">permanent_radio</property>
+                                    <signal name="toggled" handler="on_temporary_mode_changed"/>
+                                  </object>
+                                  <packing>
+                                    <property name="expand">False</property>
+                                    <property name="fill">False</property>
+                                    <property name="padding">2</property>
                                     <property name="position">2</property>
                                   </packing>
                                 </child>
                                 <child>
-                                  <object class="GtkLabel" id="label6">
+                                  <object class="GtkAlignment" id="temp_group">
                                     <property name="visible">True</property>
-                                    <property name="xalign">0</property>
-                                    <property name="yalign">0</property>
-                                    <property name="label" translatable="yes">&lt;i&gt;In this case you will be reminded to back up your data every time you connect the backup volume to the computer.&lt;/i&gt;</property>
-                                    <property name="use_markup">True</property>
-                                    <property name="justify">fill</property>
-                                    <property name="wrap">True</property>
+                                    <property name="left_padding">40</property>
+                                    <child>
+                                      <object class="GtkVBox" id="vbox5">
+                                        <property name="visible">True</property>
+                                        <property name="spacing">7</property>
+                                        <child>
+                                          <object class="GtkHBox" id="hbox2">
+                                            <property name="visible">True</property>
+                                            <child>
+                                              <object class="GtkLabel" id="label14">
+                                                <property name="visible">True</property>
+                                                <property name="xalign">0</property>
+                                                <property name="label" translatable="yes">Volume Name:</property>
+                                                <property name="width_chars">20</property>
+                                              </object>
+                                              <packing>
+                                                <property name="position">0</property>
+                                              </packing>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="volume_name_label">
+                                                <property name="visible">True</property>
+                                                <property name="xalign">0</property>
+                                                <property name="label" translatable="yes">not set</property>
+                                                <property name="width_chars">40</property>
+                                              </object>
+                                              <packing>
+                                                <property name="position">1</property>
+                                              </packing>
+                                            </child>
+                                          </object>
+                                          <packing>
+                                            <property name="position">0</property>
+                                          </packing>
+                                        </child>
+                                        <child>
+                                          <object class="GtkHBox" id="hbox4">
+                                            <property name="visible">True</property>
+                                            <child>
+                                              <object class="GtkLabel" id="label15">
+                                                <property name="visible">True</property>
+                                                <property name="xalign">0</property>
+                                                <property name="label" translatable="yes">Relative Path on Volume:</property>
+                                                <property name="width_chars">20</property>
+                                              </object>
+                                              <packing>
+                                                <property name="position">0</property>
+                                              </packing>
+                                            </child>
+                                            <child>
+                                              <object class="GtkLabel" id="relative_path_label">
+                                                <property name="visible">True</property>
+                                                <property name="xalign">0</property>
+                                                <property name="label" translatable="yes">not set</property>
+                                                <property name="width_chars">40</property>
+                                              </object>
+                                              <packing>
+                                                <property name="position">1</property>
+                                              </packing>
+                                            </child>
+                                          </object>
+                                          <packing>
+                                            <property name="position">1</property>
+                                          </packing>
+                                        </child>
+                                        <child>
+                                          <object class="GtkAspectFrame" id="aspectframe4">
+                                            <property name="visible">True</property>
+                                            <property name="label_xalign">0</property>
+                                            <property name="shadow_type">none</property>
+                                            <property name="xalign">0</property>
+                                            <child>
+                                              <object class="GtkButton" id="choose_temp_target_btn">
+                                                <property name="label" translatable="yes">Choose Path on Volume...</property>
+                                                <property name="visible">True</property>
+                                                <property name="can_focus">True</property>
+                                                <property name="receives_default">True</property>
+                                                <signal name="clicked" handler="on_choose_temp_target_btn_clicked"/>
+                                              </object>
+                                            </child>
+                                          </object>
+                                          <packing>
+                                            <property name="position">2</property>
+                                          </packing>
+                                        </child>
+                                        <child>
+                                          <object class="GtkLabel" id="label16">
+                                            <property name="visible">True</property>
+                                            <property name="xalign">0</property>
+                                            <property name="yalign">0</property>
+                                            <property name="label" translatable="yes">&lt;i&gt;In this case you will be reminded to back up your data every time you connect the backup volume to the computer.&lt;/i&gt;</property>
+                                            <property name="use_markup">True</property>
+                                            <property name="justify">fill</property>
+                                            <property name="wrap">True</property>
+                                          </object>
+                                          <packing>
+                                            <property name="position">3</property>
+                                          </packing>
+                                        </child>
+                                      </object>
+                                    </child>
                                   </object>
                                   <packing>
                                     <property name="position">3</property>
@@ -341,8 +354,77 @@
                               </object>
                             </child>
                           </object>
+                        </child>
+                        <child type="label">
+                          <object class="GtkLabel" id="label17">
+                            <property name="visible">True</property>
+                            <property name="ypad">7</property>
+                            <property name="label" translatable="yes">&lt;b&gt;Backup Location&lt;/b&gt;</property>
+                            <property name="use_markup">True</property>
+                          </object>
+                        </child>
+                      </object>
+                      <packing>
+                        <property name="padding">6</property>
+                        <property name="position">1</property>
+                      </packing>
+                    </child>
+                  </object>
+                  <packing>
+                    <property name="expand">False</property>
+                    <property name="padding">7</property>
+                    <property name="position">1</property>
+                  </packing>
+                </child>
+              </object>
+            </child>
+            <child type="tab">
+              <object class="GtkLabel" id="label7">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">General</property>
+              </object>
+              <packing>
+                <property name="tab_fill">False</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkFrame" id="frame1">
+                <property name="visible">True</property>
+                <property name="label_xalign">0</property>
+                <property name="shadow_type">none</property>
+                <child>
+                  <object class="GtkAlignment" id="alignment1">
+                    <property name="visible">True</property>
+                    <property name="left_padding">12</property>
+                    <child>
+                      <object class="GtkVBox" id="vbox6">
+                        <property name="visible">True</property>
+                        <child>
+                          <object class="GtkRadioButton" id="radio_cozyfs">
+                            <property name="label" translatable="yes">Cozy Filesystem</property>
+                            <property name="visible">True</property>
+                            <property name="can_focus">True</property>
+                            <property name="receives_default">False</property>
+                            <property name="active">True</property>
+                            <property name="draw_indicator">True</property>
+                            <signal name="toggled" handler="on_radio_cozyfs_changed"/>
+                          </object>
                           <packing>
-                            <property name="position">3</property>
+                            <property name="position">0</property>
+                          </packing>
+                        </child>
+                        <child>
+                          <object class="GtkRadioButton" id="radio_plainfs">
+                            <property name="label" translatable="yes">Plain Filesystem</property>
+                            <property name="visible">True</property>
+                            <property name="can_focus">True</property>
+                            <property name="receives_default">False</property>
+                            <property name="draw_indicator">True</property>
+                            <property name="group">radio_cozyfs</property>
+                            <signal name="toggled" handler="on_radio_plainfs_changed"/>
+                          </object>
+                          <packing>
+                            <property name="position">1</property>
                           </packing>
                         </child>
                       </object>
@@ -352,22 +434,28 @@
                 <child type="label">
                   <object class="GtkLabel" id="label9">
                     <property name="visible">True</property>
-                    <property name="ypad">7</property>
-                    <property name="label" translatable="yes">&lt;b&gt;Backup Target Location&lt;/b&gt;</property>
+                    <property name="label" translatable="yes">&lt;b&gt;Backup Type&lt;/b&gt;</property>
                     <property name="use_markup">True</property>
                   </object>
                 </child>
               </object>
               <packing>
-                <property name="padding">6</property>
                 <property name="position">1</property>
+              </packing>
+            </child>
+            <child type="tab">
+              <object class="GtkLabel" id="label8">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Advanced</property>
+              </object>
+              <packing>
+                <property name="position">1</property>
+                <property name="tab_fill">False</property>
               </packing>
             </child>
           </object>
           <packing>
-            <property name="expand">False</property>
-            <property name="padding">7</property>
-            <property name="position">1</property>
+            <property name="position">0</property>
           </packing>
         </child>
         <child>
@@ -410,7 +498,7 @@
             </child>
           </object>
           <packing>
-            <property name="position">2</property>
+            <property name="position">1</property>
           </packing>
         </child>
       </object>
@@ -579,6 +667,8 @@ and configure it later again.</property>
             </child>
           </object>
           <packing>
+            <property name="expand">False</property>
+            <property name="pack_type">end</property>
             <property name="position">1</property>
           </packing>
         </child>

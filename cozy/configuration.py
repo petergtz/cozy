@@ -21,6 +21,7 @@ class Configuration(object):
         if len(result) == 0:
             self.parser.add_section('globals')
             self.parser.add_section('backup_location')
+            self.parser.add_section('backup')
             self.backup_id = random.randint(1, 100000)
 
         self.backup_id_changed = False
@@ -28,6 +29,7 @@ class Configuration(object):
         self.data_path_changed = False
         self.backup_location_type_changed = False
         self.backup_location_identifier_changed = False
+        self.backup_type_changed = False
 
     def write(self):
         with open(os.path.expanduser('~/.cozy'), 'w') as fp:
@@ -55,7 +57,7 @@ class Configuration(object):
 
     def __get_backup_id(self):
         try:
-            return self.parser.getint('globals', 'backup_id')
+            return self.parser.getint('backup', 'backup_id')
         except ConfigParser.Error, e:
             None
 
@@ -63,7 +65,17 @@ class Configuration(object):
         self.backup_id_changed = self.backup_id != backup_id
         if not isinstance(backup_id, int):
             raise TypeError()
-        self.parser.set('globals', 'backup_id', str(backup_id))
+        self.parser.set('backup', 'backup_id', str(backup_id))
+
+    def __get_backup_type(self):
+        try:
+            return self.parser.get('backup', 'type')
+        except ConfigParser.Error, e:
+            None
+
+    def __set_backup_type(self, value):
+        self.backup_type_changed = self.backup_type != value
+        self.parser.set('backup', 'type', value)
 
     def __get_backup_location_identifier(self):
         try:
@@ -75,13 +87,6 @@ class Configuration(object):
         self.backup_location_identifier_changed = self.backup_location_identifier != value
         self.parser.set('backup_location', 'location_identifier', value)
 
-#    def __get_backup_location_name(self):
-#        try:
-#            location_identifier = self.parser.get('backup_location', 'location_identifier')
-##            return '/org/freedesktop/Cozy/BackupLocations/' + location_identifier.replace('/', '_').replace(':', '_')
-#            return '/org/freedesktop/Cozy/BackupLocations/' + md5sum_from_string(location_identifier)
-#        except ConfigParser.Error, e:
-#            None
 
     def __get_backup_location_type(self):
         try:
@@ -94,12 +99,14 @@ class Configuration(object):
         self.parser.set('backup_location', 'location_type', value)
 
     def changed(self):
-        return self.backup_id_changed or self.backup_enabled_changed or self.data_path_changed or self.backup_location_type_changed or self.backup_location_identifier_changed
+        return (self.backup_id_changed or self.backup_enabled_changed or self.data_path_changed or
+            self.backup_location_type_changed or self.backup_location_identifier_changed or
+            self.backup_type_changed)
 
     backup_enabled = property(__get_backup_enabled, __set_backup_enabled)
     data_path = property(__get_data_path, __set_data_path)
     backup_id = property(__get_backup_id, __set_backup_id)
+    backup_type = property(__get_backup_type, __set_backup_type)
 
     backup_location_type = property(__get_backup_location_type, __set_backup_location_type)
-#    backup_location_name = property(__get_backup_location_name)
     backup_location_identifier = property(__get_backup_location_identifier, __set_backup_location_identifier)

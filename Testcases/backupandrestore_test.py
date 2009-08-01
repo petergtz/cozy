@@ -38,6 +38,8 @@ class Setup:
 
         config = cozy.configuration.Configuration()
         config.backup_enabled = True
+#        config.backup_type = 'PlainFS'
+        config.backup_type = 'CozyFS'
         #config.set_backup_id(BACKUP_ID)
         config.backup_location_type = 'absolute_path'
         config.backup_location_identifier = BACKUP_DIR
@@ -49,18 +51,18 @@ class Setup:
     def make_cozyfs(self):
         os.mkdir(BACKUP_DIR)
 
-        cmdline = [COZY_MKFS_PATH, BACKUP_DIR, str(self.backup_id)]
-        print '### MAKING FS: ' + ' '.join(cmdline)
-        try:
-            process = subprocess.Popen(cmdline, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        except Exception, e:
-            print e
-            raise
-
-        (stdout, stderr) = process.communicate()
-
-        print stdout
-        return stdout
+#        cmdline = [COZY_MKFS_PATH, BACKUP_DIR, str(self.backup_id)]
+#        print '### MAKING FS: ' + ' '.join(cmdline)
+#        try:
+#            process = subprocess.Popen(cmdline, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+#        except Exception, e:
+#            print e
+#            raise
+#
+#        (stdout, stderr) = process.communicate()
+#
+#        print stdout
+#        return stdout
 
     def __exit__(self, type, value, traceback):
         if os.path.exists(DOT_COZY_BACKUP):
@@ -163,9 +165,9 @@ class DataHandler:
                         sys.exit('### FAILED file ' + abs_dir_path2 + ' does not have same mode')
                 # Note: we can also not compare mtime, since we cannot explicitely set it for the symlink with utime
                 #    so there's no way for the comparison to have equal mtimes
-                    if not stat1.st_mtime == stat2.st_mtime:
-                        sys.exit('### FAILED file ' + abs_dir_path2 + ' does not have same mtime')
 
+#                    if not stat1.st_mtime == stat2.st_mtime:
+#                        sys.exit('### FAILED file ' + abs_dir_path2 + ' does not have same mtime')
 
             for filename in filenames:
                 abs_file_path1 = os.path.join(dirpath, filename)
@@ -207,12 +209,12 @@ class DataHandler:
 class CozyBackup:
 
     def __enter__(self):
-        subprocess.call([COZY_LOCATION_MANAGER, 'start'])
-        sleep(1)
-        if not self.__manager_running(COZY_LOCATION_MANAGER):
-            msg = open('/tmp/cozy-location-manager-stderr').read()
-            os.remove('/tmp/cozy-location-manager-stderr')
-            raise Exception(msg)
+#        subprocess.call([COZY_LOCATION_MANAGER, 'start'])
+#        sleep(1)
+#        if not self.__manager_running(COZY_LOCATION_MANAGER):
+#            msg = open('/tmp/cozy-location-manager-stderr').read()
+#            os.remove('/tmp/cozy-location-manager-stderr')
+#            raise Exception(msg)
 
         subprocess.call([COZY_RESTORE_BACKEND_PATH, 'start'])
         sleep(1)
@@ -266,7 +268,7 @@ class CozyBackup:
     def __exit__(self, type, value, traceback):
         self.close_restore_mode()
         subprocess.call([COZY_RESTORE_BACKEND_PATH, 'stop'])
-        subprocess.call([COZY_LOCATION_MANAGER, 'stop'])
+#        subprocess.call([COZY_LOCATION_MANAGER, 'stop'])
 
 
 with Setup() as setup:

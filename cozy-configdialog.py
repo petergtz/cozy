@@ -43,6 +43,9 @@ class ConfigMediator:
         self.permanent_group = builder.get_object('permanent_group')
         self.temp_group = builder.get_object('temp_group')
 
+        self.cozyfs_radio = builder.get_object('radio_cozyfs')
+        self.plainfs_radio = builder.get_object('radio_plainfs')
+
         builder.connect_signals(self)
 
         self.config = Configuration()
@@ -72,9 +75,6 @@ class ConfigMediator:
                     uuid, rel_path = identifier.split(':')
                     self.volume_name_label.set_text(uuid)
                     self.relative_path_label.set_text(rel_path)
-#                if self.config.backup_volume_uuid is not None and self.config.relative_backup_path is not None:
-#                    self.volume_name_label.set_text(self.config.backup_volume_uuid)
-#                    self.relative_path_label.set_text(self.config.relative_backup_path)
                 else:
                     self.volume_name_label.set_text('Not configured')
                     self.relative_path_label.set_text('Not configured')
@@ -91,6 +91,12 @@ class ConfigMediator:
         self.on_permanent_mode_changed(self.permanent_radio)
         self.on_temporary_mode_changed(self.temp_radio)
 
+        if self.config.backup_type is not None:
+            if self.config.backup_type == 'CozyFS':
+                self.cozyfs_radio.set_active(True)
+            elif self.config.backup_type == 'PlainFS':
+                self.plainfs_radio.set_active(True)
+
     def on_backup_enable(self, widget, data=None):
         self.global_sections.set_sensitive(widget.get_active())
         self.config.backup_enabled = widget.get_active()
@@ -105,18 +111,14 @@ class ConfigMediator:
 
     def on_permanent_mode_changed(self, widget, data=None):
         if widget.get_active():
-#            self.config.backup_volume_removeable = False
             self.config.backup_location_type = 'absolute_path'
-#            self.config.set_full_target_path(target_chooser.get_filename())
             self.permanent_group.set_sensitive(True)
         else:
             self.permanent_group.set_sensitive(False)
 
     def on_temporary_mode_changed(self, widget, data=None):
         if widget.get_active():
-#            self.config.backup_volume_removeable = True
             self.config.backup_location_type = 'removeable_volume'
-#            self.config.set_full_target_path(target_chooser.get_filename())
             self.temp_group.set_sensitive(True)
         else:
             self.temp_group.set_sensitive(False)
@@ -125,7 +127,6 @@ class ConfigMediator:
         dlg = gtk.FileChooserDialog(action=gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
                                     buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_OPEN, gtk.RESPONSE_OK))
         if dlg.run() == gtk.RESPONSE_OK:
-#            self.config.full_backup_path = dlg.get_filename()
             backup_location = PathBasedBackupLocation(dlg.get_filename())
             self.config.backup_location_identifier = backup_location.serialize()
             self.absolute_path_label.set_text(backup_location.path)
@@ -136,15 +137,19 @@ class ConfigMediator:
         dlg = gtk.FileChooserDialog(action=gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
                                     buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_OPEN, gtk.RESPONSE_OK))
         if dlg.run() == gtk.RESPONSE_OK:
-#            self.source_path_label.set_text(dlg.get_filename())
-
-#            self.config.full_backup_path = dlg.get_filename()
             backup_location = RemoveableBackupLocation(arbitrary_path=dlg.get_filename())
             self.config.backup_location_identifier = backup_location.serialize()
- #           self.config.set_source_path(dlg.get_filename())
             self.volume_name_label.set_text(backup_location.uuid)
             self.relative_path_label.set_text(backup_location.rel_path)
         dlg.destroy()
+
+    def on_radio_cozyfs_changed(self, widget, data=None):
+        if widget.get_active():
+            self.config.backup_type = 'CozyFS'
+
+    def on_radio_plainfs_changed(self, widget, data=None):
+        if widget.get_active():
+            self.config.backup_type = 'PlainFS'
 
     def on_reset(self, widget, data=None):
         self.config = Configuration()
