@@ -23,10 +23,13 @@ class Data(object):
             if src_stat.st_size == dst_stat.st_size and \
                 src_stat.st_mode == dst_stat.st_mode and \
                 src_stat.st_gid == dst_stat.st_gid and \
-                src_stat.st_uid == dst_stat.st_uid and \
-                src_stat.st_mtime == dst_stat.st_mtime:
+                src_stat.st_uid == dst_stat.st_uid:
+                # TODO: reintroduce this again, to track at least mtime
+                # but for now for simplicity reason comment it out.
+#                and src_stat.st_mtime == dst_stat.st_mtime
                 # we're not interested in comparing atime, because that's the access time. Only accessing it, does not mean we need to back it up
                 return
+#                pass
         print 'Copy file to target:', dst
         shutil.copy2(src, dst)
         os.chown(dst, src_stat.st_uid, src_stat.st_gid)
@@ -48,7 +51,10 @@ class Data(object):
         os.lchown(dst, src_stat.st_uid, src_stat.st_gid)
     # new in python 2.6:    
     #    os.lchmod(dst, src_stat.st_mode)
-        os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
+    # TODO: maybe reintroduce this call again. 2 things to consider:
+    # 1. does this call change the symlinks time or the symlink's target's time
+    # 2. correct cozyfs to handle a "touch" correctly!
+#        os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
 
     def __copydir(self, src, dst):
         src_stat = os.stat(src)

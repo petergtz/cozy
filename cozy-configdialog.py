@@ -25,6 +25,7 @@ COZY_MKFS_PATH = os.path.join(ROOT_DIR, 'mkfs.cozyfs.py')
 COZY_MANAGER_PATH = os.path.join(ROOT_DIR, 'cozy-restore-backend.py')
 COZY_APPLET_PATH = os.path.join(ROOT_DIR, 'cozy-applet.py')
 BUILDER_XML_PATH = os.path.join(ROOT_DIR, 'configuration_dialog.xml')
+COZY_BACKUP_PATH = os.path.join(ROOT_DIR, 'cozy-backup.py')
 
 class ConfigMediator:
     def __init__(self, parent=None):
@@ -96,6 +97,9 @@ class ConfigMediator:
                 self.cozyfs_radio.set_active(True)
             elif self.config.backup_type == 'PlainFS':
                 self.plainfs_radio.set_active(True)
+
+        self.on_radio_cozyfs_changed(self.cozyfs_radio)
+        self.on_radio_plainfs_changed(self.plainfs_radio)
 
     def on_backup_enable(self, widget, data=None):
         self.global_sections.set_sensitive(widget.get_active())
@@ -233,8 +237,8 @@ class ConfigMediator:
         'Adds a new entry to the users crontab.'
         pid = subprocess.Popen(['crontab', '-l'], stdout=subprocess.PIPE)
         crontab = pid.stdout.read()
-        new_crontab = re.sub('\n.*cozy-backup.py', '', crontab)
-        new_crontab += '\n* * * * * cozy-backup.py'
+        new_crontab = re.sub('\n.*cozy-backup.py -f', '', crontab)
+        new_crontab += '\n0 * * * * ' + COZY_BACKUP_PATH + ' -f'
         pid = subprocess.Popen(['crontab', '-'], stdin=subprocess.PIPE)
         pid.stdin.write(new_crontab)
         pid.stdin.close()
@@ -243,7 +247,7 @@ class ConfigMediator:
         'Removes an entry from the users crontab.'
         pid = subprocess.Popen(['crontab', '-l'], stdout=subprocess.PIPE)
         crontab = pid.stdout.read()
-        new_crontab = re.sub('\n.*cozy-backup.py', '', crontab)
+        new_crontab = re.sub('\n.*cozy-backup.py -f', '', crontab)
         pid = subprocess.Popen(['crontab', '-'], stdin=subprocess.PIPE)
         pid.stdin.write(new_crontab)
         pid.stdin.close()

@@ -23,7 +23,8 @@ TEST_DATA = os.path.join(TC_DIR, 'TestData')
 DOT_COZY = os.path.expanduser('~/.cozy')
 DOT_COZY_BACKUP = os.path.expanduser('~/.cozy.orig.tc')
 DATA = os.path.expanduser('~/Cozy-TC-Data')
-BACKUP_DIR = os.path.expanduser('~/Cozy-TC-Backup-Dir')
+#BACKUP_DIR = os.path.expanduser('~/Cozy-TC-Backup-Dir')
+BACKUP_DIR = os.path.expanduser('/media/KINGSTON/Cozy-TC-Backup-Dir')
 
 
 class Setup:
@@ -204,7 +205,8 @@ class DataHandler:
     def __exit__(self, type, value, traceback):
         shutil.rmtree(self.data_dir)
         for change_number in range(len(self.changes) + 1):
-            shutil.rmtree(self.data_dir + str(change_number))
+            if os.path.lexists(self.data_dir + str(change_number)):
+                shutil.rmtree(self.data_dir + str(change_number))
 
 class CozyBackup:
 

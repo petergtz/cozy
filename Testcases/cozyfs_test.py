@@ -13,8 +13,8 @@ ROOT_DIR = os.path.join(TC_DIR, '..')
 
 
 COZYFS_PATH = os.path.join(ROOT_DIR, 'cozyfs.py')
-MKFS_PATH = os.path.join(ROOT_DIR, 'cozy-mkfs.py')
-SNAPSHOT_PATH = os.path.join(ROOT_DIR, 'snapshot.py')
+MKFS_PATH = os.path.join(ROOT_DIR, 'mkfs.cozyfs.py')
+SNAPSHOT_PATH = os.path.join(ROOT_DIR, 'cozyfssnapshot.py')
 DBFILE = "fsdb"
 TARGET_DIR = '/home/peter/MyBackup'
 

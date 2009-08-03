@@ -9,4 +9,4 @@ class BackupProvider:
         elif config.backup_type == 'CozyFS':
             return cozyfsbackup.CozyFSBackup(backup_path, config.backup_id)
         else:
-            return Exception('Backup type does not exist')
+            raise Exception('Backup type does not exist')

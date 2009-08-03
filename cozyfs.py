@@ -237,8 +237,14 @@ class CozyFS(fuse.Fuse):
             st.st_mode = stat.S_IFREG | row['mode']
         elif row["type"] == SOFT_LINK:
             st.st_nlink = 1 # FIXME: get number of links for DB
-            st.st_size = len(self.__get_data_path_from_path(path))
-            st.st_mode = stat.S_IFLNK | row['mode']
+            data_path = self.__get_data_path_from_path(path)
+            abs_data_path = os.path.normpath(os.path.join(os.path.dirname(path), data_path))
+            st.st_size = len(data_path)
+            attr = self.getattr(abs_data_path)
+            if isinstance(attr, int):
+                st.st_mode = stat.S_IFLNK #row['mode']
+            else:
+                st.st_mode = stat.S_IFLNK | attr.st_mode#row['mode']
         else:
             raise Exception, "Error: unknown file type \"" + str(row["type"]) + "\" in database."
         st.st_uid = row["uid"]

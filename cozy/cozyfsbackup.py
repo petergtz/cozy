@@ -39,21 +39,25 @@ class CozyFSBackup(Backup):
         Backup.__init__(self, backup_path, backup_id)
         self.shell = shell
 
+        cmdline = [COZY_MKFS_PATH, self.backup_path, str(self.backup_id)]
+        rc = subprocess.call(cmdline)
+        if rc != 0:
+            raise Exception('Call to mkfs.cozy.py failed.')
+
         self.db = db.connect(os.path.join(self.backup_path, DBFILE))
         self.db.row_factory = db.Row
         self.db.text_factory = str
 
-        cmdline = [COZY_MKFS_PATH, self.backup_path, str(self.backup_id)]
-        print '### MAKING FS: ' + ' '.join(cmdline)
-        try:
-            process = subprocess.Popen(cmdline, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        except Exception, e:
-            print e
-            raise
-
-        (stdout, stderr) = process.communicate()
-
-        print stdout
+#        print '### MAKING FS: ' + ' '.join(cmdline)
+#        try:
+#            process = subprocess.Popen(cmdline, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+#        except Exception, e:
+#            print e
+#            raise
+#
+#        (stdout, stderr) = process.communicate()
+#
+#        print stdout
 
     def __del__(self):
 #        Backup.__del__(self)
