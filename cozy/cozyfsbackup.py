@@ -32,6 +32,7 @@ class Shell(object):
 TC_DIR = os.path.abspath(os.path.dirname(__file__))
 ROOT_DIR = os.path.join(TC_DIR, '..')
 COZY_MKFS_PATH = os.path.join(ROOT_DIR, 'mkfs.cozyfs.py')
+COZYFS_PATH = os.path.join(ROOT_DIR, 'cozyfs.py')
 
 class CozyFSBackup(Backup):
 
@@ -74,7 +75,7 @@ class CozyFSBackup(Backup):
 
         self.__make_mount_point_dir(mount_point)
 
-        cmdline = ['cozyfs.py', mount_point, '-o', 'target_dir=' + self.backup_path + ',backup_id=' + str(self.backup_id), '-f']
+        cmdline = [COZYFS_PATH, mount_point, '-o', 'target_dir=' + self.backup_path + ',backup_id=' + str(self.backup_id), '-f']
         cmdline[-2] = cmdline[-2] + ',version=' + str(version)
 
         process = self.shell.call(cmdline)

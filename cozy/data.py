@@ -3,6 +3,10 @@ import os
 import shutil
 
 class Data(object):
+
+    class SyncError(Exception):
+        pass
+
     def __init__(self, data_path):
         self.data_path = data_path
 
@@ -10,7 +14,7 @@ class Data(object):
         filesystem = backup.mount_latest()
         errors = self.__sync_to(filesystem)
         if len(errors) != 0:
-            raise Exception('Errors during syncing:\n' + str(errors))
+            raise SyntaxError('Errors during syncing:\n' + str(errors))
 
     def __copyfile(self, src, dst):
         src_stat = os.stat(src)
