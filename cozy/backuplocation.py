@@ -56,7 +56,7 @@ class RemoveableBackupLocation(BackupLocation):
 
     def get_path(self):
         if not self.is_available():
-            raise Exception('Backup locaiton is not available')
+            raise Exception('Backup location is not available')
 
         manager = self.system_bus.get_object('org.freedesktop.Hal', '/org/freedesktop/Hal/Manager')
         devices = manager.FindDeviceStringMatch('info.udi', self.uuid, dbus_interface='org.freedesktop.Hal.Manager')

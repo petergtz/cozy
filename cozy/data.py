@@ -1,135 +1,45 @@
-import sys
-import os
-import shutil
-
-class Data(object):
-
-    class SyncError(Exception):
-        pass
-
-    def __init__(self, data_path):
-        self.data_path = data_path
-
-    def back_up_to(self, backup):
-        filesystem = backup.mount_latest()
-        errors = self.__sync_to(filesystem)
-        if len(errors) != 0:
-            raise SyntaxError('Errors during syncing:\n' + str(errors))
-
-    def __copyfile(self, src, dst):
-        src_stat = os.stat(src)
-        if os.path.exists(dst):
-            src_stat = os.stat(src)
-            dst_stat = os.stat(dst)
-                # Note: if we use ctime as a comparison, the backup will always be done for all files
-                # because ctime will never be the same, since we're changing it directly after we
-                # copied a file into the backup. So we don't compare ctime!
-            if src_stat.st_size == dst_stat.st_size and \
-                src_stat.st_mode == dst_stat.st_mode and \
-                src_stat.st_gid == dst_stat.st_gid and \
-                src_stat.st_uid == dst_stat.st_uid:
-                # TODO: reintroduce this again, to track at least mtime
-                # but for now for simplicity reason comment it out.
-#                and src_stat.st_mtime == dst_stat.st_mtime
-                # we're not interested in comparing atime, because that's the access time. Only accessing it, does not mean we need to back it up
-                return
-#                pass
-        print 'Copy file to target:', dst
-        shutil.copy2(src, dst)
-        os.chown(dst, src_stat.st_uid, src_stat.st_gid)
-        os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
-
-    def __copysymlink(self, src, dst):
-        linkto = os.readlink(src)
-        src_stat = os.lstat(src)
-        if os.path.lexists(dst):
-            dst_stat = os.lstat(dst)
-            if os.path.islink(dst) and os.readlink(dst) == linkto and \
-                dst_stat.st_gid == src_stat.st_gid and \
-                dst_stat.st_uid == src_stat.st_uid:
-                return
-            else:
-                os.remove(dst)
-        print 'Copy symlink:', dst, '->', linkto
-        os.symlink(linkto, dst)
-        os.lchown(dst, src_stat.st_uid, src_stat.st_gid)
-    # new in python 2.6:    
-    #    os.lchmod(dst, src_stat.st_mode)
-    # TODO: maybe reintroduce this call again. 2 things to consider:
-    # 1. does this call change the symlinks time or the symlink's target's time
-    # 2. correct cozyfs to handle a "touch" correctly!
-#        os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
-
-    def __copydir(self, src, dst):
-        src_stat = os.stat(src)
-        if os.path.exists(dst):
-            dst_stat = os.stat(dst)
-            if src_stat.st_mode == dst_stat.st_mode and \
-                src_stat.st_gid == dst_stat.st_gid and \
-                src_stat.st_uid == dst_stat.st_uid and \
-                src_stat.st_mtime == dst_stat.st_mtime:
-    #            src_stat.st_ctime == dst_stat.st_ctime and \
-                pass
-            else:
-                os.chmod(dst, src_stat.st_mode)
-                os.chown(dst, src_stat.st_uid, src_stat.st_gid)
-                os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
-            return
-
-        print 'Copy dir to target:', dst
-        os.mkdir(dst)
-        os.chmod(dst, src_stat.st_mode)
-        os.chown(dst, src_stat.st_uid, src_stat.st_gid)
-        os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
+from os.path import join as join_path
 
 
-    def __sync_to(self, filesystem):
-        target = filesystem.mount_point
-        source = self.data_path
+def __remove_removed_source_files_in_target_dir(target_dirpath, source_filenames, filesystem_functions):
+    for target_dir_file in filesystem_functions.listdir(target_dirpath):
+        if filesystem_functions.isfile(join_path(target_dirpath, target_dir_file)) and target_dir_file not in source_filenames:
+            filesystem_functions.remove(join_path(target_dirpath, target_dir_file))
 
-        errors = []
+def __remove_removed_source_dirs_in_target_dir(target_dirpath, source_dirnames, filesystem_functions):
+    for target_dir_file in filesystem_functions.listdir(target_dirpath):
+        if filesystem_functions.isdir(join_path(target_dirpath, target_dir_file)) and target_dir_file not in source_dirnames:
+            filesystem_functions.remove_dir(join_path(target_dirpath, target_dir_file))
 
-        for dirpath, dirnames, filenames in os.walk(source):
+def __update_dirs_in_target_dir(source_dirpath, target_dirpath, dirnames, fsf):
+    for dirname in dirnames:
+        src = join_path(source_dirpath, dirname)
+        dst = join_path(target_dirpath, dirname)
+        if fsf.islink(src):
+            fsf.update_symlink(src, dst)
+        else:
+            fsf.update_dir(src, dst)
 
-            rel_path = dirpath.replace(source, '').lstrip('/')
+def __update_files_in_target_dir(source_dirpath, target_dirpath, filenames, fsf):
+    for filename in filenames:
+        src = join_path(source_dirpath, filename)
+        dst = join_path(target_dirpath, filename)
+        if fsf.islink(src):
+            fsf.update_symlink(src, dst)
+        else:
+            fsf.update_file(src, dst)
 
-            for target_dir_file in os.listdir(os.path.join(target, rel_path)):
-                try:
-                    abs_target_path = os.path.join(target, rel_path, target_dir_file)
-                    if (os.path.isfile(abs_target_path) or (os.path.islink(abs_target_path))) and \
-                        target_dir_file not in filenames:
 
-                        print 'Remove file in target:', abs_target_path
-                        os.remove(abs_target_path)
+def sync(source, target, filesystem_functions):
+    fsf = filesystem_functions
 
-                    if os.path.isdir(abs_target_path) and \
-                        target_dir_file not in dirnames:
+    for source_dirpath, dirnames, filenames in filesystem_functions.walk(source):
 
-                        print 'Remove dir in target:', abs_target_path
-                        shutil.rmtree(abs_target_path)
-                except EnvironmentError, e:
-                    errors.append(str(e))
+        rel_path = source_dirpath.replace(source, '').lstrip('/')
+        target_dirpath = join_path(target, rel_path)
 
-            for dirname in dirnames:
-                try:
-                    src = os.path.join(dirpath, dirname)
-                    dst = os.path.join(target, rel_path, dirname)
-                    if os.path.islink(src):
-                        self.__copysymlink(src, dst)
-                    else:
-                        self.__copydir(src, dst)
-                except EnvironmentError, e:
-                    errors.append(str(e))
+        __remove_removed_source_files_in_target_dir(target_dirpath, filenames, fsf)
+        __remove_removed_source_dirs_in_target_dir(target_dirpath, dirnames, fsf)
 
-            for filename in filenames:
-                try:
-                    src = os.path.join(dirpath, filename)
-                    dst = os.path.join(target, rel_path, filename)
-                    if os.path.islink(src):
-                        self.__copysymlink(src, dst)
-                    else:
-                        self.__copyfile(src, dst)
-                except EnvironmentError, e:
-                    errors.append(str(e))
-
-        return errors
+        __update_dirs_in_target_dir(source_dirpath, target_dirpath, dirnames, fsf)
+        __update_files_in_target_dir(source_dirpath, target_dirpath, filenames, fsf)

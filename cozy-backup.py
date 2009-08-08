@@ -4,11 +4,17 @@ import sys
 
 from cozy.configuration import Configuration
 from cozy.backupprovider import BackupProvider
-from cozy.data import Data
+import cozy.data
 from cozy.locationmanager import LocationManager
+from cozy.filesystemfunctions import FileSystemFunctions
+
+import logging
+import logging.config
 
 import dbus
 import time
+
+import os.path
 
 
 if __name__ == '__main__':
@@ -22,9 +28,14 @@ if __name__ == '__main__':
     else:
         answer = raw_input("Do you really want to back up your data?")
 
-    file = open('/tmp/cozy-backup.log', 'w')
     if answer in ['y', 'Y', 'yes']:
+
+        logging.config.fileConfig(os.path.expanduser('~/.cozy.logging.conf'))
+
+        logger = logging.getLogger('cozy.backup')
+
         try:
+            logger.info('STARTING BACKUP SESSION')
             config = Configuration()
 
             backup_provider = BackupProvider()
@@ -35,26 +46,24 @@ if __name__ == '__main__':
 
             backup_location = location_manager.get_backup_location()
 
-            if not backup_location.is_available():
-                sys.exit('Backup location not available')
-
             backup = backup_provider.get_backup(backup_location.get_path(), config)
+            logger.info('Version Number: %d', backup.get_latest_version())
 
-            data = Data(config.data_path)
-            try:
-                data.back_up_to(backup)
-            except Data.SyncError, e:
-                file.write("Error backup sync: " + str(e))
+            filesystem = backup.mount_latest()
 
-#            file.write('Bis hierher geschaaft')
+            filesystem_functions = FileSystemFunctions(filesystem.mount_point, logger)
+
+
+            logger.info('Backing up data from ' + config.data_path + ' to ' + filesystem.mount_point + ': ')
+            cozy.data.sync(config.data_path, filesystem.mount_point, filesystem_functions)
 
             time.sleep(1)
 
             backup.clone_latest()
+
+            logger.info('Ending backup session properly with new version number: %d', backup.get_latest_version())
+
         except Exception, e:
-            file.write(str(e))
-
-
-
-
-    file.close()
+#            logger.error(str(e))
+            logger.exception(str(e))
+#            raise
