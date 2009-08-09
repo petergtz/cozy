@@ -11,19 +11,28 @@ class FileSystem(object):
         self._unmount()
         self._remove_mount_point_dir(self.mount_point)
 
+    def __enter__(self):
+        return self
+
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._unmount()
+        self._remove_mount_point_dir(self.mount_point)
+
+
     def _unmount(self):
         if self._is_mounted():
             subprocess.call(['fusermount', '-z', '-u', self.mount_point])
-        else:
-            warnings.warn('Tried to unmount a backup which is not mounted.')
+#        else:
+#            warnings.warn('Tried to unmount a backup which is not mounted.')
 
 
     def _remove_mount_point_dir(self, mount_point):
         if os.path.exists(mount_point):
             os.rmdir(mount_point)
-        else:
-            warnings.warn('Tried to remove a mount point that does not exits.')
-        if len(os.listdir(os.path.dirname(mount_point))) == 0:
+#        else:
+#            warnings.warn('Tried to remove a mount point that does not exits.')
+        if os.path.exists(os.path.dirname(mount_point)) and len(os.listdir(os.path.dirname(mount_point))) == 0:
             os.rmdir(os.path.dirname(mount_point))
 
     def _is_mounted(self):
@@ -48,9 +57,9 @@ class SymlinkedFileSystem(FileSystem):
     def _remove_mount_point_dir(self, mount_point):
         if os.path.exists(mount_point):
             os.unlink(mount_point)
-        else:
-            warnings.warn('Tried to remove a mount point that does not exits.')
-        if len(os.listdir(os.path.dirname(mount_point))) == 0:
+#        else:
+#            warnings.warn('Tried to remove a mount point that does not exits.')
+        if os.path.exists(os.path.dirname(mount_point)) and len(os.listdir(os.path.dirname(mount_point))) == 0:
             os.rmdir(os.path.dirname(mount_point))
 
     def _is_mounted(self):

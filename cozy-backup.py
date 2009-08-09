@@ -1,5 +1,7 @@
 #!/usr/bin/python
 
+from __future__ import with_statement
+
 import sys
 
 from cozy.configuration import Configuration
@@ -49,19 +51,18 @@ if __name__ == '__main__':
             backup = backup_provider.get_backup(backup_location.get_path(), config)
             logger.info('Version Number: %d', backup.get_latest_version())
 
-            filesystem = backup.mount_latest()
+            with backup.mount_latest() as filesystem:
 
-            filesystem_functions = FileSystemFunctions(filesystem.mount_point, logger)
+                filesystem_functions = FileSystemFunctions(filesystem.mount_point, logger)
 
-
-            logger.info('Backing up data from ' + config.data_path + ' to ' + filesystem.mount_point + ': ')
-            cozy.data.sync(config.data_path, filesystem.mount_point, filesystem_functions)
+                logger.info('Backing up data from ' + config.data_path + ' to ' + filesystem.mount_point + ': ')
+                cozy.data.sync(config.data_path, filesystem.mount_point, filesystem_functions)
 
             time.sleep(1)
 
             backup.clone_latest()
 
-            logger.info('Ending backup session properly with new version number: %d', backup.get_latest_version())
+            logger.info('ENDING BACKUP SESSION properly with new version number: %d', backup.get_latest_version())
 
         except Exception, e:
 #            logger.error(str(e))

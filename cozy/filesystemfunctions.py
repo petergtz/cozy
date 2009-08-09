@@ -1,6 +1,8 @@
 import os
 import shutil
 
+import utils.md5sum
+
 
 write_on_user_data_string = 'Tried to write user data during backup: '
 
@@ -34,22 +36,26 @@ class FileSystemFunctions(object):
             dst_stat = os.stat(dst)
             skipped = True
             if src_stat.st_size != dst_stat.st_size:
-                self.logger.debug(info_string + 'source-size(%d) != target-size(%d)', rc_stat.st_size, dst_stat.st_size)
+                self.logger.debug(info_string + 'source-size(%d) != target-size(%d)', src_stat.st_size, dst_stat.st_size)
+                self.__copy_file(src, src_stat, dst)
+                skipped = False
+            elif utils.md5sum.md5sum(src) != utils.md5sum.md5sum(dst):
+                self.logger.debug(info_string + 'file content changed')
                 self.__copy_file(src, src_stat, dst)
                 skipped = False
             if src_stat.st_mode != dst_stat.st_mode:
-                self.logger.debug(info_string + 'source-mode(%d) != target-mode(%d)', rc_stat.st_mode, dst_stat.st_mode)
+                self.logger.debug(info_string + 'source-mode(%d) != target-mode(%d)', src_stat.st_mode, dst_stat.st_mode)
                 os.chmod(dst, src_stat.st_mode)
                 skipped = False
             if src_stat.st_gid != dst_stat.st_gid or src_stat.st_uid != dst_stat.st_uid:
                 self.logger.debug(info_string + 'source-GID(%d) != target-GID(%d) or source-UID(%d) != target-UID(%d)',
-                                  rc_stat.st_gid, dst_stat.st_gid, rc_stat.st_uid, dst_stat.st_uid)
+                                  src_stat.st_gid, dst_stat.st_gid, src_stat.st_uid, dst_stat.st_uid)
                 os.chown(dst, src_stat.st_uid, src_stat.st_gid)
                 skipped = False
     # TODO: IMPORTANT: FILE CONTENT WAS NOT COMPARED!!!            
 
             if skipped:
-                self.logger.info(info_string + 'Skipped')
+                self.logger.debug(info_string + 'Skipped')
             else:
                 self.logger.info(info_string + 'Updated')
 
@@ -71,6 +77,7 @@ class FileSystemFunctions(object):
 
         try:
             linkto = os.readlink(src)
+            info_string += 'pointing to: ' + linkto + ': '
             src_stat = os.lstat(src)
 
             if not os.path.lexists(dst):
@@ -78,24 +85,22 @@ class FileSystemFunctions(object):
                 os.lchown(dst, src_stat.st_uid, src_stat.st_gid)
                 self.logger.info(info_string + 'Copied')
                 return
-
-            skipped = True
             if not os.path.islink(dst) or os.readlink(dst) != linkto:
                 os.remove(dst)
                 os.symlink(linkto, dst)
                 os.lchown(dst, src_stat.st_uid, src_stat.st_gid)
                 self.logger.debug(info_string + 'symlink targets different')
-                skipped = False
+                self.logger.info(info_string + 'Updated')
+                return
+            dst_stat = os.lstat(dst)
             if dst_stat.st_gid != src_stat.st_gid or dst_stat.st_uid != src_stat.st_uid:
                 os.lchown(dst, src_stat.st_uid, src_stat.st_gid)
                 self.logger.debug(info_string + 'source-GID(%d) != target-GID(%d) or source-UID(%d) != target-UID(%d)',
                                   rc_stat.st_gid, dst_stat.st_gid, rc_stat.st_uid, dst_stat.st_uid)
-                skipped = False
-
-            if skipped:
-                self.logger.info(info_string + 'Skipped')
-            else:
                 self.logger.info(info_string + 'Updated')
+                return
+
+            self.logger.debug(info_string + 'Skipped')
 
     # new in python 2.6:    
     #    os.lchmod(dst, src_stat.st_mode)
@@ -105,7 +110,7 @@ class FileSystemFunctions(object):
 #        os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
 
         except Exception, e:
-            self.logger.error(info_string + str(e))
+            self.logger.exception(info_string + str(e))
 
 
     def update_dir(self, src, dst):
@@ -135,12 +140,12 @@ class FileSystemFunctions(object):
                 skipped = False
 
             if skipped:
-                self.logger.info(info_string + 'Skipped')
+                self.logger.debug(info_string + 'Skipped')
             else:
                 self.logger.info(info_string + 'Updated')
 
         except Exception, e:
-            self.logger.error(str(e))
+            self.logger.exception(str(e))
 
     def remove(self, path):
         self.__assert_writing_to_write_path(path)
