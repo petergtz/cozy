@@ -116,6 +116,13 @@ class CozyFS(fuse.Fuse):
         if cursor.fetchone() == None:
             self.readonly = False
 
+        if self.readonly == False:
+            self.lockfile = os.path.join(self.target_dir, 'lock')
+            if os.path.exists(self.lockfile):
+                sys.stderr.write("Error: Filesystem is already mounted. If not, please remove " + self.lockfile + " manually and try again.\n")
+                exit(4)
+
+            os.mknod(self.lockfile)
 
         version = int(self.version)
         self.versions = []
@@ -129,11 +136,11 @@ class CozyFS(fuse.Fuse):
         return fuse.Fuse.main(self)
 
 
-    def __del__(self):
-        self.db.commit()
+    def close(self):
+        if self.readonly == False:
+            self.db.commit()
+            os.remove(self.lockfile)
         self.db.close()
-        return fuse.Fuse.__del__(self)
-
 
     def __backup_id_versions_where_statement(self, table_name):
         return " (backup_id = " + self.backup_id + " AND (" + (table_name + ".version = ") + (" or " + table_name + ".version = ").join(map(str, self.versions)) + ") ) "
@@ -696,7 +703,8 @@ class CozyFS(fuse.Fuse):
 
         else:
             os.remove(tmp_path)
-            self.__update_attributes(inode, {'atime': ctime})
+            if not self.readonly:
+                self.__update_attributes(inode, {'atime': ctime})
 
         return 0
 
@@ -823,7 +831,10 @@ def mount():
     FS.parser.add_option(mountopt="version", metavar="BASE", default="", help="version of backup this backup is based up on")
     FS.parse(values=FS)
     FS.main()
-    FS.db.commit()
+    FS.close()
+
+
+#    FS.db.commit()
 
 sqlite3.enable_callback_tracebacks(True)
 log = logging.getLogger('cozyfs')

@@ -80,10 +80,13 @@ class CozyFSBackup(Backup):
 
         process = self.shell.call(cmdline)
         if not self.shell.is_running(process):
-            if self.shell.return_code(process) == 3:
-                raise CozyFSBackup.MountException('Error: Mount failed because database couldn''t be found')
+            return_code = self.shell.return_code(process)
+            if  return_code == 3:
+                raise Backup.MountException('Error: Mount failed because database couldn''t be found.')
+            elif  return_code == 4:
+                raise Backup.MountException('Error: Mount failed because filesystem is locked.')
             else:
-                raise CozyFSBackup.MountException('Error: Mount failed due to unknown reasons')
+                raise Backup.MountException('Error: Mount failed due to unknown reasons.')
 
         return FileSystem(mount_point)
 

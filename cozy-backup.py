@@ -9,6 +9,7 @@ from cozy.backupprovider import BackupProvider
 import cozy.data
 from cozy.locationmanager import LocationManager
 from cozy.filesystemfunctions import FileSystemFunctions
+from cozy.backup import Backup
 
 import logging
 import logging.config
@@ -64,6 +65,8 @@ if __name__ == '__main__':
 
             logger.info('ENDING BACKUP SESSION properly with new version number: %d', backup.get_latest_version())
 
+        except Backup.MountException, e:
+            logger.error(str(e))
         except Exception, e:
 #            logger.error(str(e))
             logger.exception(str(e))

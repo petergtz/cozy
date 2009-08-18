@@ -265,8 +265,8 @@ def clean_tmp_dir():
 
 def umount(mountpath):
     print '### UNMOUNTING'
-    os.system('fusermount -z -u ' + mountpath)
     os.chdir('/')
+    os.system('fusermount -z -u ' + mountpath)
     shutil.rmtree(mountpath)
 
 def remove_cozyfs(target_dir, backup_id):
