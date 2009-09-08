@@ -1,0 +1,15 @@
+[globals]
+backup_enabled = True
+invocation_type=automatic|manual
+
+
+[data]
+path=/path/to/data
+
+[backup_location]
+location_type=absolute_path|removeable_volume
+location_identifier=/absolute/path/to/location | uuid:relative/path/to/location
+
+[backup]
+type=CozyFS|PlainFS|HardlinkFS
+backup_id = 18851
