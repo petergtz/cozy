@@ -1,0 +1,82 @@
+Index: src/TextureDisplay.cs
+===================================================================
+--- src/TextureDisplay.cs	(Revision 4570)
++++ src/TextureDisplay.cs	(Arbeitskopie)
+@@ -96,6 +96,9 @@
+ 
+ 			flip = new Animator (6000, 6000, delegate { flip.Start (); item.MoveNext (true); }); 
+ 			flip.RunWhenStarted = false;
++
++			previous = null;
++			next = null;
+ 		}
+ 
+ 		public override void Dispose ()
+@@ -185,8 +188,9 @@
+ 			if (!item.IsValid || item.Collection.Count < 0)
+ 				return;
+ 
+-			//Next = null;
+-			PreloadNext ();
++			previous.Dispose ();
++			previous = next;
++			next = CreateTexture ();
+ 
+ 			if (running)
+ 				Animator.Start ();
+@@ -280,6 +284,9 @@
+ 			Colormap = glx.GetColormap ();
+ 
+ 			base.OnRealized ();
++
++			previous = CreateTexture ();
++			next = CreateTexture ();
+ 		}
+ 
+ 		protected override void OnMapped ()
+@@ -310,44 +317,12 @@
+ 		}
+ 
+ 		Texture previous;
+-		public Texture Previous {
+-			get {
+-				if (previous == null)
+-					previous = Next;
+-				
+-				return previous;
+-			}
+-			set {
+-				if (previous != next && previous != null)
+-					previous.Dispose ();
+-
+-				previous = value;
+-			}
+-		}
+-
+ 		Texture next;
+-		public Texture Next {
+-			get {
+-				if (next == null)
+-					PreloadNext ();
+-				return next;
+-			}
+-			set {
+-				Texture tmp = next;
+-				next = value;
+-				Previous = tmp;
+-			}
+-		}
+ 
+-		private void PreloadNext ()
+-		{
+-			Next = CreateTexture ();
+-		}
+-
+ 		GlTransition transition;
+ 		private void DrawTransition ()
+ 		{
+-			Transition.Draw (Allocation, Next, Previous);
++			Transition.Draw (Allocation, next, previous);
+ 		}
+ 
+ 		private void DrawPixels ()

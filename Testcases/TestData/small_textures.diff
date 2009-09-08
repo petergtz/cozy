@@ -1,0 +1,51 @@
+Index: src/GlTransition.cs
+===================================================================
+--- src/GlTransition.cs	(Revision 4570)
++++ src/GlTransition.cs	(Arbeitskopie)
+@@ -311,7 +311,7 @@
+ 			
+ 			float aspect_scale = (texture.Width / (float) texture.Height) / (viewport.Width / (float) viewport.Height);
+ 			float size_scale = Math.Max (viewport.Width / (float) texture.Width, viewport.Height / (float) texture.Height);
+-			bool both_smaller = (viewport.Width / (float) texture.Width) > 1 && (viewport.Height / (float) texture.Height) > 1;
++			bool both_smaller = (viewport.Width / (float) texture.RealWidth) > 1 && (viewport.Height / (float) texture.RealHeight) > 1;
+ 			
+ 			Gl.glMatrixMode (Gl.GL_TEXTURE);
+ 			Gl.glLoadIdentity ();
+Index: src/Texture.cs
+===================================================================
+--- src/Texture.cs	(Revision 4570)
++++ src/Texture.cs	(Arbeitskopie)
+@@ -29,6 +29,8 @@
+ 		int texture_id;
+ 		int width;
+ 		int height;
++		int real_width;
++		int real_height;
+ 		
+ 		public int Width {
+ 			get { return width; }
+@@ -38,6 +40,14 @@
+ 			get { return height; }
+ 		}
+ 		
++		public int RealWidth {
++			get { return real_width; }
++		}
++
++		public int RealHeight {
++			get { return real_height; }
++		}
++		
+ 		public int Id {
+ 			get { return texture_id; }
+ 		}
+@@ -66,6 +76,9 @@
+ 			this.width = width;
+ 			this.height = height;
+ 			
++			real_width = width;
++			real_height = height;
++			
+ 			Gl.glGenTextures (1, out texture_id);
+ 			//System.Console.WriteLine ("generated texture.{0} ({1}, {2})", texture_id, width, height); 
+ 		}

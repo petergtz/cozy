@@ -1,0 +1,302 @@
+
+using System.Runtime.InteropServices;
+
+using System;
+using System.Collections;
+
+using System.IO;
+using Glade;
+using Mono.Unix;
+using Gtk;
+using FSpot;
+using FSpot.Extensions;
+using FSpot.Filters;
+using FSpot.UI.Dialog;
+using FSpot.Utils;
+using FSpot.Widgets;
+
+namespace FSpot
+{
+	public class DVDSlideshowExporter : IExporter
+	{
+		IBrowsableCollection selection;
+
+		protected string dialog_name = "dvd_slideshow_export_dialog";
+		protected Glade.XML xml;
+		private Gtk.Dialog dialog;
+
+		[Glade.Widget] Gtk.ScrolledWindow thumb_scrolledwindow;
+		[Glade.Widget] Gtk.HBox chooser_hbox;
+		[Glade.Widget] Gtk.Entry title_entry;
+		[Glade.Widget] Gtk.Entry filename_entry;
+		[Glade.Widget] Gtk.CheckButton open_check;
+		[Glade.Widget] Gtk.RadioButton pal_radio;
+		Gtk.FileChooserButton uri_chooser;
+
+		FSpot.ThreadProgressDialog progress_dialog;
+		System.Threading.Thread command_thread;
+		
+		string path;
+		string title;
+		string filename;
+		bool open;
+		string output_format="";
+		
+		string control_file;
+		ArrayList photo_filenames;
+
+		bool backend_successful;
+		
+		System.Diagnostics.Process process;
+		string output;
+
+		public void Run (IBrowsableCollection selection)
+		{
+			Console.WriteLine("Executing DVDSlideshow extension");
+			
+			if (!IsBackendInstalled()) {
+				InfoDialog(Catalog.GetString ("DVDSlideshow not available"),
+					   Catalog.GetString ("The dvd-slideshow executable was not found in path. Please check that you have it installed and that you have permissions to execute it"),
+					   Gtk.MessageType.Error);
+				return;
+			}
+				
+			
+			this.selection = selection;
+			xml = new Glade.XML (null,"dvd_slideshow_exporter_dialog.glade", dialog_name, "f-spot");
+			xml.Autoconnect (this);
+			dialog = (Gtk.Dialog) xml.GetWidget(dialog_name);
+			      
+			
+			FSpot.Widgets.IconView view = new FSpot.Widgets.IconView (selection);
+			view.DisplayDates = false;
+			view.DisplayTags = false;
+
+			dialog.Modal = false;
+			dialog.TransientFor = null;
+			
+			dialog.Response += HandleResponse;
+
+			thumb_scrolledwindow.Add (view);
+			
+			string uri_path = System.IO.Path.Combine (FSpot.Global.HomeDirectory, "Desktop");
+			if (!System.IO.Directory.Exists (uri_path))
+			        uri_path = FSpot.Global.HomeDirectory;
+
+			uri_chooser = new Gtk.FileChooserButton (Catalog.GetString  ("Select Export Folder"),
+								 Gtk.FileChooserAction.SelectFolder);
+			
+			uri_chooser.LocalOnly = false;
+
+			if (Preferences.Get (Preferences.EXPORT_FOLDER_URI) != null && Preferences.Get (Preferences.EXPORT_FOLDER_URI) as string != String.Empty)
+				uri_chooser.SetUri (Preferences.Get (Preferences.EXPORT_FOLDER_URI) as string);
+			else
+				uri_chooser.SetFilename (uri_path);
+
+			chooser_hbox.PackStart (uri_chooser);
+
+			dialog.ShowAll();
+			
+		}
+		
+		private bool IsBackendInstalled() {
+			string output = "";
+			try {
+				System.Diagnostics.Process mp_check = new System.Diagnostics.Process();
+				mp_check.StartInfo.RedirectStandardOutput = true;
+				mp_check.StartInfo.UseShellExecute = false;
+				mp_check.StartInfo.FileName = "dvd-slideshow";
+				mp_check.StartInfo.Arguments = "-version";
+				mp_check.Start();
+				mp_check.WaitForExit ();
+				StreamReader sroutput = mp_check.StandardOutput;
+				output = sroutput.ReadLine();
+			} catch (System.Exception) {
+			}
+			return System.Text.RegularExpressions.Regex.IsMatch(output, "[dvd-slideshow]");
+		}
+		
+		
+		private void HandleResponse (object sender, Gtk.ResponseArgs args)
+		{
+			if (args.ResponseId != Gtk.ResponseType.Ok) {
+				// FIXME this is to work around a bug in gtk+ where
+				// the filesystem events are still listened to when
+				// a FileChooserButton is destroyed but not finalized
+				// and an event comes in that wants to update the child widgets.
+				dialog.Destroy ();
+				uri_chooser.Dispose ();
+				uri_chooser = null;
+				return;
+			}
+			title = title_entry.Text;
+			filename = filename_entry.Text;
+			path = uri_chooser.Filename;
+			open = open_check.Active;
+			if (pal_radio.Active) output_format="-p";
+			
+			if (System.IO.File.Exists(path+"/"+filename+".vob"))
+				if(HigMessageDialog.RunHigMessageDialog(MainWindow.Toplevel.Window, DialogFlags.DestroyWithParent,
+						  Gtk.MessageType.Question, ButtonsType.YesNo,
+						   Catalog.GetString ("File exists"), 
+						   Catalog.GetString ("The file "+path+"/"+filename+".vob already exists. Do you want to overwrite it?")) == Gtk.ResponseType.No)
+					return;
+
+			command_thread = new System.Threading.Thread (new System.Threading.ThreadStart (CreateSlideshow));
+			command_thread.Name = Catalog.GetString ("Creating Slideshow");
+
+			progress_dialog = new FSpot.ThreadProgressDialog (command_thread, 1);
+			progress_dialog.Start ();
+			progress_dialog.Response += HandleAbort;
+		}
+		
+		protected void CreateSlideshow() 
+		{
+			try {
+				backend_successful = false;
+				
+				dialog.Hide();
+				
+				progress_dialog.ProgressText = "";
+				progress_dialog.Message = Catalog.GetString ("Preparing Photos");
+				progress_dialog.Fraction = 0.0;
+				RotatePhotos();
+
+				progress_dialog.ProgressText = "";
+				progress_dialog.Message = Catalog.GetString ("Creating Control File");
+				progress_dialog.Fraction = 0.1;
+				// FIXME: The progressbar does not reflect the real progress of dvd-slideshow
+				CreateControlFile();
+
+				progress_dialog.ProgressText = "";
+				progress_dialog.Message = Catalog.GetString ("Processing Control File");
+				progress_dialog.Fraction = 0.2;
+				RunDvdSlideShow();
+
+				progress_dialog.ProgressText = "";
+				progress_dialog.Message = Catalog.GetString ("Done Creating DVD Slideshow");
+				progress_dialog.Fraction = 1.0;
+				progress_dialog.ButtonLabel = Gtk.Stock.Ok;
+				
+				backend_successful = true;
+
+				if (open) 
+					GnomeUtil.UrlShow (null, uri_chooser.Uri);
+
+			} catch (System.Exception e) {
+				progress_dialog.Message = e.ToString ();
+				progress_dialog.ProgressText = Catalog.GetString ("Error Processing");
+			} finally {
+				System.IO.File.Delete (control_file);
+				System.IO.File.Delete (path + "/dvd-slideshow.log");
+				System.IO.File.Delete (path + "/" + filename + ".xml");
+				Gtk.Application.Invoke (delegate { dialog.Destroy(); });
+			}
+		}
+		
+		protected void RotatePhotos()
+		{
+			photo_filenames = new ArrayList();
+			FilterSet filters = new FilterSet ();
+			filters.Add (new JpegFilter ());
+			filters.Add (new OrientationFilter ());
+			foreach (IBrowsableItem p in selection.Items) {
+				FilterRequest freq=new FilterRequest(p.DefaultVersionUri);
+				filters.Convert (freq);
+				photo_filenames.Add(freq);
+			}
+		}
+		
+		protected void CreateControlFile()
+		{
+			control_file = System.IO.Path.GetTempFileName ();
+			Console.WriteLine ("Using Control File {0}", control_file);	
+			System.IO.StreamWriter stream = new System.IO.StreamWriter (control_file);
+			AddTitle (stream, title);
+			bool first_time = true;
+			foreach (FilterRequest p in photo_filenames) {
+				if (first_time) {
+					first_time = false;
+					AddFadeOut(stream);
+					AddFadeIn(stream);
+				} else
+					AddCrossFade(stream);
+					
+				AddPhoto (stream,p.Current.LocalPath);
+			}
+			AddFadeOut (stream);
+			stream.Close();
+			
+			Console.WriteLine ("Created a DVD slideshow master file for {0} pictures", selection.Count);	
+		}
+		
+		private void RunDvdSlideShow()
+		{
+			process = new System.Diagnostics.Process();
+			process.StartInfo.UseShellExecute = false;
+			process.StartInfo.RedirectStandardOutput = true;
+			process.StartInfo.FileName = "dvd-slideshow";
+			// FIXME: -mp2 is just a workaround for a sound-issue ouI have with dvd-slideshow 0.7.5
+			process.StartInfo.Arguments = String.Format ("-n '{0}' {3} -mp2 -f {1} -o {2}", filename, control_file, path,output_format); 
+			System.Console.WriteLine("Creating DVD slideshow with command: dvd-slideshow {0}", process.StartInfo.Arguments);
+			process.Start();
+			double lines_used_by_backend=4*selection.Count+50, line=1;
+			while (!process.HasExited) {
+				output += process.StandardOutput.ReadLine();
+				progress_dialog.Fraction=0.2+line/lines_used_by_backend;
+				line++;
+			}
+		}
+		
+		protected void HandleAbort(object sender, Gtk.ResponseArgs args)
+		{
+			if (!backend_successful) {
+				System.Console.WriteLine("DVD Slideshow Exporter Aborted");
+				process.Kill();
+				process.WaitForExit();
+				output += process.StandardOutput.ReadToEnd();
+				if(System.Text.RegularExpressions.Regex.IsMatch(output,@"Temp dir is /.*/dvd-slideshow_temp_\d*"))
+					System.IO.Directory.Delete(System.Text.RegularExpressions.Regex.Match(output,@"Temp dir is /.*/dvd-slideshow_temp_\d*").ToString().Substring(12),true);
+			}
+		}
+	
+		protected void AddTitle (System.IO.StreamWriter stream, string title)
+		{
+			stream.WriteLine ("title:5:{0}", title);
+		}
+		
+		protected void AddFadeOut (System.IO.StreamWriter stream)
+		{
+			stream.WriteLine ("fadeout:2");
+		}
+		
+		protected void AddCrossFade (System.IO.StreamWriter stream)
+		{
+			stream.WriteLine ("crossfade:2");
+		}
+		
+		protected void AddFadeIn (System.IO.StreamWriter stream)
+		{
+			stream.WriteLine ("fadein:2");
+		}
+		
+		protected void AddPhoto (System.IO.StreamWriter stream, string photo_path)
+		{
+			stream.WriteLine ("{0}:5", photo_path);
+		}
+		
+		private void InfoDialog (string title, string msg, Gtk.MessageType type) {
+			HigMessageDialog md = new HigMessageDialog (MainWindow.Toplevel.Window, DialogFlags.DestroyWithParent,
+						  type, ButtonsType.Ok, title, msg);
+
+			md.Run ();
+			md.Destroy ();
+
+		}
+				
+	}
+}
+
+
+
+

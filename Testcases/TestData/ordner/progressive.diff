@@ -1,0 +1,13 @@
+Index: src/PhotoImageView.cs
+===================================================================
+--- src/PhotoImageView.cs	(Revision 4582)
++++ src/PhotoImageView.cs	(Arbeitskopie)
+@@ -218,7 +218,7 @@
+ 				}
+ 			}
+ 
+-			progressive_display = true;
++			progressive_display = false;
+ 
+ 			if (prev != this.Pixbuf && prev != null)
+ 				prev.Dispose ();

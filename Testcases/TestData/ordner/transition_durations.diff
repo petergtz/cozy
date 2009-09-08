@@ -1,0 +1,50 @@
+Index: src/GlTransition.cs
+===================================================================
+--- src/GlTransition.cs	(Revision 4582)
++++ src/GlTransition.cs	(Arbeitskopie)
+@@ -114,8 +114,7 @@
+ 				Glu.gluLookAt (0, 0, 2,
+ 					       0, 0, 0,
+ 					       0, 1, 1);
+-				
+-				Gl.glRotatef (90 * -percent, 0, 1, 0);
++				Gl.glRotatef (90 * -(float)(1 / (1 + Math.Exp (-12 * (percent - 0.5)))), 0, 1, 0);
+ 
+ 				Gl.glMatrixMode (Gl.GL_PROJECTION);
+ 				Gl.glLoadIdentity ();
+Index: src/TextureDisplay.cs
+===================================================================
+--- src/TextureDisplay.cs	(Revision 4582)
++++ src/TextureDisplay.cs	(Arbeitskopie)
+@@ -177,7 +180,7 @@
+ 		Animator animator;
+ 		private void HandleItemChanged (BrowsablePointer p, BrowsablePointerChangedArgs args)
+ 		{
+-			Animator = new Animator (3000, 20, HandleTick);
++			Animator = new Animator (Preferences.Get<int> (Preferences.TRANSITION_DURATION), 1, HandleTick);
+ 
+ 			if (glx == null)
+ 				return;
+Index: src/Preferences.cs
+===================================================================
+--- src/Preferences.cs	(Revision 4582)
++++ src/Preferences.cs	(Arbeitskopie)
+@@ -53,6 +53,8 @@
+ 		public const string GROUP_ADAPTOR = "/apps/f-spot/ui/group_adaptor";
+ 		public const string GROUP_ADAPTOR_ORDER_ASC = "/apps/f-spot/ui/group_adaptor_sort_asc";
+ 		
++		public const string TRANSITION_DURATION = "/apps/f-spot/ui/transition_duration";
++		
+ 		public const string SIDEBAR_POSITION = "/apps/f-spot/ui/sidebar_size";
+ 		public const string ZOOM = "/apps/f-spot/ui/zoom";
+ 
+@@ -121,6 +123,9 @@
+ 			case MAIN_WINDOW_MAXIMIZED:
+ 			case GROUP_ADAPTOR_ORDER_ASC:
+ 				return false;
++				
++			case TRANSITION_DURATION:
++				return 1000;
+ 
+ 			case GROUP_ADAPTOR:
+ 			case GLASS_POSITION:

@@ -1,0 +1,15 @@
+<Addin namespace="FSpot"
+       version="1.5.0.0"
+       id="DVDExport"
+       name="DVD Slideshow Exporter"
+       description="Create DVD slideshow from your photos using DVD-Slideshow (http://dvd-slideshow.sf.net)"
+       author="Peter Goetz, Original Version: Bengt Thuree"
+       url="http://f-spot.org/Extensions"
+       category="Export">
+        <Dependencies>
+                <Addin id="Core" version="0.4.0.3457"/>
+        </Dependencies>
+        <Extension path = "/FSpot/Menus/Exports">
+                <ExportMenuItem id="DVDExport" _label = "_DVD slideshow..." class = "FSpot.DVDSlideshowExporter" />
+        </Extension>
+</Addin>

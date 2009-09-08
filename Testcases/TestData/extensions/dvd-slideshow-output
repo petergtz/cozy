@@ -1,0 +1,75 @@
+peter@pider:~$ dvd-slideshow -n 'MySlideshow' -p -mp2 -f /tmp/tmp6a1131a6.tmp -o /home/peter
+[dvd-slideshow]            dvd-slideshow 0.7.5
+[dvd-slideshow]            Licensed under the GNU GPL
+[dvd-slideshow]            Copyright 2003-2006 by Scott Dylewski
+[dvd-slideshow]            
+[dvd-slideshow] Parsing input .txt file /tmp/tmp6a1131a6.tmp
+[dvd-slideshow] ############################################################
+[dvd-slideshow] Found 3 images.
+[dvd-slideshow] Found 0 audio files.
+[dvd-slideshow] Found 0 background slides.
+[dvd-slideshow] Found 1 title slides.
+[dvd-slideshow] Found 5 transitions (fadein/fadeout/crossfade).
+[dvd-slideshow] Video: PAL  Audio: MP2
+[dvd-slideshow] Debug=0  Autocrop=0 Subtitles=render
+[dvd-slideshow] Total video length = 0:0:30.000
+[dvd-slideshow] Temp dir is /home/peter/dvd-slideshow_temp_22632
+[dvd-slideshow] Creating black background
+[dvd-slideshow]############################################################
+[dvd-slideshow] Title 0:0:5.000
+[dvd-slideshow]         Title=My Title
+[dvd-slideshow]############################################################
+[dvd-slideshow] Fadeout 0:0:2.000
+[dvd-slideshow]############################################################
+[dvd-slideshow] Fadein 0:0:2.000
+[dvd-slideshow]############################################################
+[dvd-slideshow] 1/3 /home/peter/Sonstiges/Photos/2008/01/11/P1110329-1.JPG 0:0:5.000
+[dvd-slideshow]############################################################
+[dvd-slideshow] Crossfade 0:0:2.000
+[dvd-slideshow]############################################################
+[dvd-slideshow] 2/3 /home/peter/Sonstiges/Photos/2008/01/11/P1110331_hdr-1.jpg 0:0:5.000
+[dvd-slideshow]############################################################
+[dvd-slideshow] Crossfade 0:0:2.000
+[dvd-slideshow]############################################################
+[dvd-slideshow] 3/3 /home/peter/Sonstiges/Photos/2008/01/11/P1110330-1.JPG 0:0:5.000
+[dvd-slideshow]############################################################
+[dvd-slideshow] Fadeout 0:0:2.000
+[dvd-slideshow]############################################################
+[dvd-slideshow] waiting for mpeg2enc to finish...
+[dvd-slideshow]#####################################
+[dvd-slideshow] No audio files passed.  Using 0:0:30.000 silence.
+[dvd-slideshow] Working on track 1 audio file 0
+[dvd-slideshow] silence
+[dvd-slideshow] Creating silence audio file for 0:0:30.000
+[dvd-slideshow] This audio plays in slideshow from 0:0:0.000 to 0:0:30.000
+[dvd-slideshow] ###############
+[dvd-slideshow] Concatenating all audio files...
+[dvd-slideshow] Creating mp2 audio using toolame 0.2l...
+Parsing Wave File Header
+>>> 48000 Hz sampling freq selected
+>>> Input Wave File is Stereo
+--------------------------------------------
+Input File : '/home/peter/dvd-slideshow_temp_22632/audio1.wav'   48.0 kHz
+Output File: '/home/peter/dvd-slideshow_temp_22632/audio1.mp2'
+128 kbps MPEG-1 Layer II j-stereo Psy model 1 
+[De-emph:Off    Copyright:No    Original:No     CRC:Off]
+[Padding:Normal Byte-swap:Off   Chanswap:Off    DAB:Off]
+ATH adjustment 0.000000
+--------------------------------------------
+encode_init: using tablenum 0 with sblimit 27
+Hit end of audio data
+Avg slots/frame = 384.000; b/smp = 2.67; bitrate = 128.000 kbps
+
+Done
+[dvd-slideshow]############################################################
+[dvd-slideshow] Multiplexing audio and video...
+[dvd-slideshow]############################################################
+[dvd-slideshow] No subtitles... removing .spumux file
+[dvd-slideshow] total chapters=4
+[dvd-slideshow] chapter markers at 0,0:0:9.000,0:0:16.000,0:0:23.000
+[dvd-slideshow]############################################################
+[dvd-slideshow] cleanup...
+[dvd-slideshow] More extensive logfile output is at:
+[dvd-slideshow] /home/peter/dvd-slideshow.log
+[dvd-slideshow] Done!
+

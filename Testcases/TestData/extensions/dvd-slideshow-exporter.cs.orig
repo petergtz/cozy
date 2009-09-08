@@ -1,0 +1,299 @@
+using FSpot;
+using FSpot.Extensions;
+using System.Runtime.InteropServices;
+
+using System;
+using System.Collections;
+using Mono.Posix;
+
+namespace FSpot.Extensions {
+
+	public class DVD_SlideShowExtension: FSpot.Extensions.ExportExtension
+	{
+		protected override string ConfigurationName { get { return "DVD_SlideShowExtension"; } }
+		public override string DisplayName { get { return "DVD Slideshow Extension"; } }
+		public override string Description { get { return "This extension will create a DVD slideshow of selected photos"; } }
+		public override string MenuEntryName { get { return "DVD Slideshow"; } }
+//		public override ExtensionCategory Category { get { return ExtensionCategory.Export; } }
+		public override ExtensionRevision Revision { get { return new ExtensionRevision(0, 0, 2); } }
+		public override string [] Authors {
+			get { 
+				return new string [] {
+					"Bengt Thuree <bengt@thuree.com>"
+				};
+			} 
+		}
+
+		public DVD_SlideShowExtension () : base()
+		{
+			Console.WriteLine("new DVD-SlideShowExtension instanciated !");	
+		}
+
+/*
+We will create the following import file.
+title:5:This is my title
+fadein:2
+picture 1.jpg:4
+fadein:2
+pano.jpg:4
+fadein:2
+picture2.jpg:3
+fadeout:2
+
+We aim for the below pseudocode
+Loop
+	Create control file
+	dvd-slideshow -n 'test complete' -f Complete_example.txt -a 'strojovna_07-TEXEMPO-30s.ogg'
+	store photos internally
+	
+dvd-menu -t 'My example' -t 'Slideshow 2' -f test_complete.xml -f test_complete.xml -n 'Complete Example DVD'
+
+cp -a <stored photos> dvd_fs
+mkisofs -dvd-video -udf -o dvd.iso dvd_fs
+
+Gui
+	Create another slideshow on same dvd
+	Finished, create slideshow now
+	Quit
+
+If BASH3 && dvd-slideshow <= 0.7.2 ---> Warning!
+
+Need to rotate the photos... so copy the photos first, then attach it to the control file.
+Also, run this in its own thread so f-spot main gui is not blocked.
+
+*/
+		System.IO.StreamWriter stream;
+		
+		static IBrowsableCollection selection11;
+		static int testing = 0;
+		
+		private string CreateWorkDirectory()
+		{
+			// Create a tmp directory.
+			string tmp_dir = System.IO.Path.GetTempFileName ();	// Create a tmp file	
+			System.IO.File.Delete (tmp_dir);			// Delete above tmp file
+			System.IO.Directory.CreateDirectory (tmp_dir);		// Create a directory with above tmp name
+			return tmp_dir;
+		}
+
+		string work_directory;
+		private string WorkDirectory
+		{
+			get { if (work_directory == null)
+				work_directory = CreateWorkDirectory();
+				return work_directory;
+			}
+			set { work_directory = value; 
+			}
+		}
+
+		
+		private string ControlFile {
+			get { return "f-spot_slideshow.txt"; }
+		}
+		
+		private System.IO.StreamWriter CreateMasterFile()
+		{
+			string master_file = GetMasterFile(); 
+			return new System.IO.StreamWriter (master_file);
+		}
+
+		private string GetMasterFile()
+		{
+			string master_file = String.Format ("{0}{1}{2}.txt",
+							       WorkDirectory,
+							       System.IO.Path.DirectorySeparatorChar,
+							       ControlFile);
+			return master_file;
+		}
+
+		private string GetDVDMasterFile()
+		{
+			string str = GetMasterFile();
+			str.Replace (".txt", ".xml");
+			return str;
+		}
+		
+		private void AddTitle ()
+		{
+			stream.WriteLine ("title:5:F-Spot created slideshow");
+		}
+		
+		private void SetFading()
+		{
+			stream.WriteLine ("fadein:2");
+		}
+		
+		private void AddPhoto (string photo_path)
+		{
+			SetFading();
+			stream.WriteLine ("{0}:5", photo_path);
+		}
+
+		private void CreateControlFile()
+		{
+			stream = CreateMasterFile();
+			AddTitle ();
+			foreach (Photo p in photos.Items) 
+				AddPhoto (p.DefaultVersionUri.LocalPath);
+			AddEnding ();
+			stream.Close();
+			
+			Console.WriteLine ("Created a DVD slideshow master file for {0} pictures", photos.Count);	
+		}
+		
+		private void AddEnding ()
+		{
+			stream.WriteLine ("fadeout:2");
+		}
+
+		[DllImport ("libc")] 
+		extern static int system (string program);
+		
+		private void RunDvdSlideShow()
+		{
+			// dvd-slideshow -n 'test complete' -f Complete_example.txt -a 'strojovna_07-TEXEMPO-30s.ogg'
+			string cmd = String.Format ("dvd-slideshow -n '{0}' -f {1} -o {2}",
+				"F-Spot test complete", GetMasterFile(), WorkDirectory);
+			system (cmd); 
+		}
+		
+		private void RunDvdMenu()
+		{
+			// dvd-menu -t 'My example' -t 'Slideshow 2' -f test_complete.xml -f test_complete.xml -n 'Complete Example DVD'
+			string cmd = String.Format ("dvd-menu -t '{0}' -t '{1}' -f {2} -f {3} -n '{4}",
+				"F-Spot slideshow 1",
+				"F-Spot slideshow 2",
+				GetDVDMasterFile(),
+				GetDVDMasterFile(),
+				"Finished");
+			system (cmd);
+		}
+		
+		private void StorePhotos()
+		{
+//			foreach (Photo p in photos.Items) 
+//				System.IO.File.Copy (p.DefaultVersionUri.LocalPath, "dvd_fs/orig_photos/");
+		}
+		
+		private void MkDvdIso()
+		{
+		}
+		
+		private void LaunchIsoBurner()
+		{
+		}
+		
+		protected override void Run()
+		{
+			this.selection11 = selection;
+System.Console.WriteLine ("Testing = {0}", testing);
+			try {
+				new DVD_SlideShowExtensionDialog();
+			} catch (Exception ex) {
+				Console.WriteLine(ex);
+			}
+
+/*
+			CreateControlFile();
+			RunDvdSlideShow();
+			RunDvdMenu();
+			StorePhotos();
+			MkDvdIso();
+			LaunchIsoBurner();
+*/			
+		}
+
+		protected override void ExtensionInitialize()
+		{
+			Console.WriteLine("Initializing DVD-SlideShowExtension");	
+		}
+
+		protected override void ExtensionDispose()
+		{
+			Console.WriteLine("Disposing DVD-SlideShowExtension");
+		}
+		
+		public class DVD_SlideShowExtensionDialog
+		{
+			private string dialog_name = "DVD-SlideShowDialog";
+			private Glade.XML xml;
+			private Gtk.Dialog dialog;
+
+			[Glade.Widget] Gtk.ScrolledWindow scrolledwindow_icons;	
+
+			[Glade.Widget] Gtk.Label extensions_label;
+			[Glade.Widget] Gtk.Label loaded_label;
+			[Glade.Widget] Gtk.Viewport extensions_vp;
+
+			public DVD_SlideShowExtensionDialog()
+			{
+				CreateDialog();
+				Dialog.Modal = false;
+				Dialog.TransientFor = null;
+
+				IconView view = new IconView (selection11);
+				view.DisplayDates = false;
+				view.DisplayTags = false;
+
+				Dialog.Modal = false;
+				Dialog.TransientFor = null;
+			
+//				size_label.Text = SizeUtil.ToHumanReadable (total_size);
+
+				scrolledwindow_icons.Add (view);
+				Dialog.ShowAll ();
+
+	//			Populate();
+
+				Dialog.ShowAll();
+				Dialog.Response += HandleResponse;
+			}
+			
+			private void CreateDialog()
+			{
+				xml = new Glade.XML (null, "DVD-SlideShowExtension.glade", dialog_name, "f-spot");
+				xml.Autoconnect (this);
+			}
+
+			private Gtk.Dialog Dialog {
+				get {
+					if (dialog == null)
+						dialog = (Gtk.Dialog) xml.GetWidget (dialog_name);
+					return dialog;
+				}
+			}
+			
+			private void HandleResponse (object sender, Gtk.ResponseArgs args)
+			{
+				switch ( args.ResponseId ) {
+				case Gtk.ResponseType.Close :
+	System.Console.WriteLine ("Close");	
+	testing++;
+					break;
+				case Gtk.ResponseType.Cancel :
+					goto default;
+					break;
+				case Gtk.ResponseType.Apply :
+	System.Console.WriteLine ("APPLY");	
+	testing=0;					
+	//				CreateDVDSlideShow();
+					break;
+				default :
+	//				CleanUp();
+	System.Console.WriteLine ("CANCEL");
+	testing=0;
+					break;
+				}
+
+				Dialog.Destroy();
+				return;
+			}
+			
+		
+		}
+	}
+	
+
+}
+
