@@ -1,15 +1,8 @@
-Dependencies
-=============
-
-apt-get install python-fuse python-xdelta3
-
-
 Install-Instructions
 =====================
 
 from within this directory on the command line:
 
-ln -s $PWD/cozy ~/.nautilus/python-extensions/cozy
 ln -s $PWD/cozy-restore-nautilus-extension.py ~/.nautilus/python-extensions/
 
-No further installation steps needed. Execute commands from within this directory.
+No further installation steps needed.

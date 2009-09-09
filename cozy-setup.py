@@ -36,12 +36,15 @@ from cozy.backuplocation import PathBasedBackupLocation, RemoveableBackupLocatio
 from cozy.locationmanager import LocationManager
 import dbus
 
-ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
-COZY_MKFS_PATH = os.path.join(ROOT_DIR, 'mkfs.cozyfs.py')
-COZY_MANAGER_PATH = os.path.join(ROOT_DIR, 'cozy-restore-backend.py')
-COZY_APPLET_PATH = os.path.join(ROOT_DIR, 'cozy-applet.py')
-BUILDER_XML_PATH = os.path.join(ROOT_DIR, 'configuration_dialog.xml')
-COZY_BACKUP_PATH = os.path.join(ROOT_DIR, 'cozy-backup.py')
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+COZY_MKFS_PATH = os.path.join(BASE_DIR, 'cozyfs/mkfs.cozyfs.py')
+
+COZY_RESTORE_BACKEND_PATH = os.path.join(BASE_DIR, 'cozy-restore-backend.py')
+COZY_BACKUP_APPLET_PATH = os.path.join(BASE_DIR, 'cozy-backup-applet.py')
+COZY_BACKUP_PATH = os.path.join(BASE_DIR, 'cozy-backup.py')
+
+BUILDER_XML_PATH = os.path.join(BASE_DIR, 'configuration_dialog.xml')
 
 class ConfigMediator:
     def __init__(self, parent=None):
@@ -186,7 +189,7 @@ class ConfigMediator:
         return True
 
     def __start_applet(self):
-        subprocess.Popen([COZY_APPLET_PATH])
+        subprocess.Popen([COZY_BACKUP_APPLET_PATH])
 
     def __stop_applet(self):
         subprocess.call(['killall', 'cozy-applet.py'])
@@ -197,7 +200,7 @@ class ConfigMediator:
             self.config.write()
             if not self.config.backup_enabled:
                 self.__stop_applet()
-                self.__stop_manager()
+                self.__stop_restore_backend()
                 self.__remove_crontab_entry()
                 return False
 
@@ -222,7 +225,7 @@ class ConfigMediator:
                 self.__remove_crontab_entry()
                 if not self.__applet_running():
                     self.__start_applet()
-            self.__restart_manager()
+            self.__restart_restore_backend()
         return False
 
     def destroy(self, widget, data=None):
@@ -231,14 +234,14 @@ class ConfigMediator:
             gtk.main_quit()
 
 
-    def __restart_manager(self):
+    def __restart_restore_backend(self):
         print 'Restarting cozy-manager.py'
-        os.system(COZY_MANAGER_PATH + ' restart')
+        os.system(COZY_RESTORE_BACKEND_PATH + ' restart')
         time.sleep(2)
 
-    def __stop_manager(self):
+    def __stop_restore_backend(self):
         print 'Stopping cozy-manager.py'
-        os.system(COZY_MANAGER_PATH + ' stop')
+        os.system(COZY_RESTORE_BACKEND_PATH + ' stop')
         time.sleep(2)
 
 #        if process.poll() is not None:

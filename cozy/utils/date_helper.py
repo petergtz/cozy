@@ -1,7 +1,5 @@
-#!/usr/bin/python
-
 # Cozy Backup Solution
-# Copyright (C) 2009  Peter Goetz
+# Copyright (C) 2009  peter
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 2 as published by
@@ -16,21 +14,11 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-import sys
+from time import strptime, mktime, strftime, localtime
 
-from  cozy.backup_action import back_up
+def epoche2date(epoche):
+    return strftime('%Y-%m-%d_%H-%M-%S', localtime(epoche))
 
+def date2epoche(date):
+    return int(mktime(strptime(date, '%Y-%m-%d_%H-%M-%S')))
 
-if __name__ == '__main__':
-
-    if len(sys.argv) > 2:
-        exit("USAGE: " + __name__ + "[-f]; -f = start immediately backing up data")
-
-
-    if len(sys.argv) == 2 and sys.argv[1] == '-f':
-        answer = 'y'
-    else:
-        answer = raw_input("Do you really want to back up your data?")
-
-    if answer in ['y', 'Y', 'yes', 'Yes']:
-        back_up()

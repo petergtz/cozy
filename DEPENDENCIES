@@ -1,0 +1,4 @@
+Dependencies
+=============
+
+apt-get install python-fuse python-xdelta3

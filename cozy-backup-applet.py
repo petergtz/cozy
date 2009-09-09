@@ -26,6 +26,7 @@ import dbus
 import gobject
 
 import subprocess
+import cozy.backup_action
 
 #import cozy.configdialog
 
@@ -36,11 +37,9 @@ import time
 from cozy.locationmanager import LocationManager
 from cozy.configuration import Configuration
 
-ROOT_DIR = os.path.abspath(os.path.dirname(__file__))
-COZY_BACKUP_PATH = os.path.join(ROOT_DIR, 'cozy-backup.py')
-#COZY_MANAGER_PATH = os.path.join(ROOT_DIR, 'cozy-manager.py')
-COZY_CONFIGDLG_PATH = os.path.join(ROOT_DIR, 'cozy-configdialog.py')
-COZY_ICON_PATH = os.path.join(ROOT_DIR, 'Icon/cozy.svg')
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+COZY_CONFIGDLG_PATH = os.path.join(BASE_DIR, 'cozy-configdialog.py')
+COZY_ICON_PATH = os.path.join(BASE_DIR, 'Icon/cozy.svg')
 
 class CozyIcon(gtk.StatusIcon):
     '''
@@ -53,7 +52,7 @@ class CozyIcon(gtk.StatusIcon):
         result = dlg.run()
         dlg.destroy()
         if result == gtk.RESPONSE_YES:
-            process = subprocess.Popen([COZY_BACKUP_PATH, '-f'])
+            cozy.backup_action.back_up()
 
     def on_popup_menu(self, button, activate_time):
         menu = gtk.Menu()

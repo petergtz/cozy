@@ -15,20 +15,14 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 import os
-from time import strptime, mktime, strftime, localtime, sleep, time
+from time import sleep, time
+from utils.date_helper import epoche2date, date2epoche
 
 from filesystem import SymlinkedFileSystem
 
 from backup import Backup
 
 import shutil
-
-
-def epoche2date(epoche):
-    return strftime('%Y-%m-%d_%H-%M-%S', localtime(epoche))
-
-def date2epoche(date):
-    return int(mktime(strptime(date, '%Y-%m-%d_%H-%M-%S')))
 
 
 class PlainBackup(Backup):

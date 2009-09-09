@@ -24,10 +24,6 @@ import time
 
 FSDB = 'fsdb'
 
-# TODO: check if FS is mounted and refuse to do the snapshot. We don't want a
-#       inconsistent FS.
-#		How can we check this? -> create a lock file in the backupdir
-
 def snapshot(target_path, backup_id, based_on_version=None):
 
 	db = sqlite3.connect(os.path.join(target_path, FSDB))
