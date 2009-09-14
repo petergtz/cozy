@@ -12,9 +12,9 @@ TC_DIR = os.path.abspath(os.path.dirname(__file__))
 ROOT_DIR = os.path.join(TC_DIR, '..')
 
 
-COZYFS_PATH = os.path.join(ROOT_DIR, 'cozyfs.py')
-MKFS_PATH = os.path.join(ROOT_DIR, 'mkfs.cozyfs.py')
-SNAPSHOT_PATH = os.path.join(ROOT_DIR, 'cozyfssnapshot.py')
+COZYFS_PATH = os.path.join(ROOT_DIR, 'cozyfs', 'cozyfs.py')
+MKFS_PATH = os.path.join(ROOT_DIR, 'cozyfs', 'mkfs.cozyfs.py')
+SNAPSHOT_PATH = os.path.join(ROOT_DIR, 'cozyfs', 'cozyfssnapshot.py')
 DBFILE = "fsdb"
 TARGET_DIR = '/home/peter/MyBackup'
 
@@ -278,21 +278,21 @@ def remove_cozyfs(target_dir, backup_id):
 mountpath = '/tmp/cozy-TestCase'
 
 try:
-    version1 = make_cozyfs(target_dir=TARGET_DIR, backup_id=666)
+    make_cozyfs(target_dir=TARGET_DIR, backup_id=666)
 
     mount(mountpath, target_dir=TARGET_DIR, backup_id=666)
     mkdir('folder1')
     neg_mkdir('folder1')
     umount(mountpath)
 
-    mount(mountpath, target_dir=TARGET_DIR, backup_id=666, version=version1)
+    mount(mountpath, target_dir=TARGET_DIR, backup_id=666)#, version=version1)
     neg_mkdir('folder1')
     move('folder1', 'folder1_renamed')
     copy(os.path.join(TC_DIR, 'file1'), 'file1')
     move('file1', 'folder1_renamed/file1')
     umount(mountpath)
 
-    version2 = snapshot(TARGET_DIR, 666, based_on_version=version1)
+    version2 = snapshot(TARGET_DIR, 666)#, based_on_version=version1)
 
     mount(mountpath, target_dir=TARGET_DIR, backup_id=666, version=version2)
     mkdirs('folder2/folder3')

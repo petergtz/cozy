@@ -105,7 +105,7 @@ class RestoreBackend(dbus.service.Object):
                 filesystem = self.backup.mount(backup_version)
                 self.filesystems[backup_version] = filesystem
             if filesystem.has_relative_path(relative_path):
-                return filesystem.full_path(relative_path)
+                return filesystem.full_path_from(relative_path)
 
         return ''
 
@@ -129,7 +129,7 @@ class RestoreBackend(dbus.service.Object):
                 filesystem = self.backup.mount(backup_version)
                 self.filesystems[backup_version] = filesystem
             if filesystem.has_relative_path(relative_path):
-                return filesystem.full_path(relative_path)
+                return filesystem.full_path_from(relative_path)
 
         return ''
 

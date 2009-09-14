@@ -15,13 +15,13 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 import cozyfsbackup
-import plainbackup
+import plainfsbackup
 
 class BackupProvider:
 
     def get_backup(self, backup_path, config):
         if config.backup_type == 'PlainFS':
-            return plainbackup.PlainBackup(backup_path, config.backup_id)
+            return plainfsbackup.PlainFSBackup(backup_path, config.backup_id)
         elif config.backup_type == 'CozyFS':
             return cozyfsbackup.CozyFSBackup(backup_path, config.backup_id)
         else:

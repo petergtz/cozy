@@ -1,5 +1,5 @@
 # Cozy Backup Solution
-# Copyright (C) 2009  Peter Goetz
+# Copyright (C) 2009  peter
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License version 2 as published by
@@ -16,16 +16,36 @@
 
 import os
 import shutil
-
-import utils.md5sum
-
+import cozyutils
 
 write_on_user_data_string = 'Tried to write user data during backup: '
 
-class FileSystemFunctions(object):
+
+
+class FileUpdateStrategy(object):
     def __init__(self, write_path, logger):
-        self.logger = logger
         self.write_path = write_path
+        self.logger = logger
+
+    def update_file(self, src, dst):
+        raise NotImplementedError()
+
+    def update_symlink(self, src, dst):
+        raise NotImplementedError()
+
+    def update_dir(self, src, dst):
+        raise NotImplementedError()
+
+    def remove(self, path):
+        raise NotImplementedError()
+
+    def remove_dir(self, path):
+        raise NotImplementedError()
+
+class ChangeReplacesFileUpdateStrategy(FileUpdateStrategy):
+    pass
+
+class ChangeChangesFileUpdateStrategy(FileUpdateStrategy):
 
     def __assert_writing_to_write_path(self, path):
         if not path.startswith(self.write_path):
@@ -55,7 +75,7 @@ class FileSystemFunctions(object):
                 self.logger.debug(info_string + 'source-size(%d) != target-size(%d)', src_stat.st_size, dst_stat.st_size)
                 self.__copy_file(src, src_stat, dst)
                 skipped = False
-            elif utils.md5sum.md5sum(src) != utils.md5sum.md5sum(dst):
+            elif cozyutils.md5sum.md5sum(src) != cozyutils.md5sum.md5sum(dst):
                 self.logger.debug(info_string + 'file content changed')
                 self.__copy_file(src, src_stat, dst)
                 skipped = False
@@ -170,7 +190,7 @@ class FileSystemFunctions(object):
         try:
             os.remove(path)
         except Exception, e:
-            logger.error(str(e))
+            self.logger.error(str(e))
 
     def remove_dir(self, path):
         self.__assert_writing_to_write_path(path)
@@ -179,19 +199,4 @@ class FileSystemFunctions(object):
         try:
             shutil.rmtree(path)
         except Exception, e:
-            logger.error(str(e))
-
-    def islink(self, path):
-        return os.path.islink(path)
-
-    def isdir(self, path):
-        return os.path.isdir(path)
-
-    def isfile(self, path):
-        return os.path.isfile(path)
-
-    def walk(self, path):
-        return os.walk(path)
-
-    def listdir(self, path):
-        return os.listdir(path)
+            self.logger.error(str(e))

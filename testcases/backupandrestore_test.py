@@ -25,7 +25,6 @@ DOT_COZY = os.path.expanduser('~/.cozy')
 DOT_COZY_BACKUP = os.path.expanduser('~/.cozy.orig.tc')
 DATA = os.path.expanduser('~/Cozy-TC-Data')
 BACKUP_DIR = os.path.expanduser('~/Cozy-TC-Backup-Dir')
-#BACKUP_DIR = os.path.expanduser('/media/KINGSTON/Cozy-TC-Backup-Dir')
 
 
 class Setup:
@@ -251,7 +250,7 @@ class CozyBackup:
         return True
 
     def backup_data(self):
-        cmdline = [COZY_BACKUP_PATH, '-f']
+        cmdline = [COZY_BACKUP_PATH, '-s']
         print '### BACKING UP DATA: ' + ' '.join(cmdline)
         ret = subprocess.call(cmdline)
         if ret != 0:

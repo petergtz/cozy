@@ -22,7 +22,7 @@ import dbus
 
 import random
 
-from  utils.md5sum import md5sum_from_string
+from  cozyutils.md5sum import md5sum_from_string
 
 class Configuration(object):
 

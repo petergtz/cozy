@@ -17,6 +17,7 @@
 import subprocess
 import os
 
+
 class FileSystem(object):
 
     def __init__(self, mount_point):
@@ -24,26 +25,24 @@ class FileSystem(object):
 
     def __del__(self):
         self._unmount()
-        self._remove_mount_point_dir(self.mount_point)
+        self._remove_mount_point_dir()
 
     def __enter__(self):
         return self
 
-
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._unmount()
-        self._remove_mount_point_dir(self.mount_point)
-
+        self._remove_mount_point_dir()
 
     def _unmount(self):
         if self._is_mounted():
             subprocess.call(['fusermount', '-z', '-u', self.mount_point])
 
-    def _remove_mount_point_dir(self, mount_point):
-        if os.path.exists(mount_point):
-            os.rmdir(mount_point)
-        if os.path.exists(os.path.dirname(mount_point)) and len(os.listdir(os.path.dirname(mount_point))) == 0:
-            os.rmdir(os.path.dirname(mount_point))
+    def _remove_mount_point_dir(self):
+        if os.path.exists(self.mount_point):
+            os.rmdir(self.mount_point)
+        if os.path.exists(os.path.dirname(self.mount_point)) and len(os.listdir(os.path.dirname(self.mount_point))) == 0:
+            os.rmdir(os.path.dirname(self.mount_point))
 
     def _is_mounted(self):
         return os.path.exists(self.mount_point) and os.path.ismount(self.mount_point)
@@ -56,20 +55,5 @@ class FileSystem(object):
     def has_relative_path(self, relative_path):
         return os.path.exists(os.path.join(self.mount_point, relative_path))
 
-    def full_path(self, relative_path):
+    def full_path_from(self, relative_path):
         return os.path.join(self.mount_point, relative_path)
-
-
-class SymlinkedFileSystem(FileSystem):
-    def _unmount(self):
-       pass
-
-    def _remove_mount_point_dir(self, mount_point):
-        if os.path.exists(mount_point):
-            os.unlink(mount_point)
-        if os.path.exists(os.path.dirname(mount_point)) and len(os.listdir(os.path.dirname(mount_point))) == 0:
-            os.rmdir(os.path.dirname(mount_point))
-
-    def _is_mounted(self):
-        return os.path.exists(self.mount_point)
-

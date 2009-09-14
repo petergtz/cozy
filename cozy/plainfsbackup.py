@@ -16,16 +16,17 @@
 
 import os
 from time import sleep, time
-from utils.date_helper import epoche2date, date2epoche
 
-from filesystem import SymlinkedFileSystem
+from cozyutils.date_helper import epoche2date, date2epoche
+
+from symlinkedfilesystem import SymlinkedFileSystem
 
 from backup import Backup
 
 import shutil
 
 
-class PlainBackup(Backup):
+class PlainFSBackup(Backup):
 
     def __init__(self, backup_path, backup_id):
         Backup.__init__(self, backup_path, backup_id)

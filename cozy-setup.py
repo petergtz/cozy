@@ -256,8 +256,8 @@ class ConfigMediator:
         'Adds a new entry to the users crontab.'
         pid = subprocess.Popen(['crontab', '-l'], stdout=subprocess.PIPE)
         crontab = pid.stdout.read()
-        new_crontab = re.sub('(?m)^.*cozy-backup.py -f\n', '', crontab)
-        new_crontab += '* * * * * ' + COZY_BACKUP_PATH + ' -f\n'
+        new_crontab = re.sub('(?m)^.*cozy-backup.py -s\n', '', crontab)
+        new_crontab += '* * * * * ' + COZY_BACKUP_PATH + ' -s\n'
         pid = subprocess.Popen(['crontab', '-'], stdin=subprocess.PIPE)
         pid.stdin.write(new_crontab)
         pid.stdin.close()
@@ -266,7 +266,7 @@ class ConfigMediator:
         'Removes an entry from the users crontab.'
         pid = subprocess.Popen(['crontab', '-l'], stdout=subprocess.PIPE)
         crontab = pid.stdout.read()
-        new_crontab = re.sub('(?m)^.*cozy-backup.py -f\n', '', crontab)
+        new_crontab = re.sub('(?m)^.*cozy-backup.py -s\n', '', crontab)
         pid = subprocess.Popen(['crontab', '-'], stdin=subprocess.PIPE)
         pid.stdin.write(new_crontab)
         pid.stdin.close()

@@ -27,12 +27,12 @@ import dbus
 import dbus.service
 
 from cozy.configuration import Configuration
-import utils.daemon
+import cozyutils.daemon
 
 from cozy.restorebackend import RestoreBackend
 from cozy.locationmanager import LocationManager
 
-class ManagerDaemon(utils.daemon.Daemon):
+class ManagerDaemon(cozyutils.daemon.Daemon):
     def run(self):
 
         DBusGMainLoop(set_as_default=True)

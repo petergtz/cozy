@@ -56,7 +56,7 @@ if __name__ == '__main__':
 	if len(sys.argv) < 4:
 		based_on_version = None
 	else:
-		based_on_version = sys.argv[3]
+		based_on_version = int(sys.argv[3])
 
-	version = snapshot(target_path=sys.argv[1], backup_id=int(sys.argv[2]), based_on_version=int(based_on_version))
+	version = snapshot(target_path=sys.argv[1], backup_id=int(sys.argv[2]), based_on_version=based_on_version)
 	print version

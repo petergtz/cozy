@@ -18,6 +18,8 @@ import pwd
 import os
 import tempfile
 
+from cozy.fileupdatestrategy import ChangeChangesFileUpdateStrategy
+
 class Backup(object):
 
     class MountException(Exception):
@@ -118,3 +120,6 @@ class Backup(object):
         returns the latest version this backup contains
         '''
         raise NotImplementedError()
+
+    def get_file_update_strategy(self, mounted_filesystem, logger):
+        return ChangeChangesFileUpdateStrategy(mounted_filesystem.mount_point, logger)
