@@ -18,7 +18,6 @@ from __future__ import with_statement
 
 from cozy.configuration import Configuration
 from cozy.backupprovider import BackupProvider
-import cozy.data
 from cozy.locationmanager import LocationManager
 from cozy.backup import Backup
 

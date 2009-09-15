@@ -64,8 +64,9 @@ class FakeDBFactory(object):
     def set_fetchone_result(value):
         FakeDBFactory.db.set_fetchone_result(value)
 
-BASE_DIR = os.path.normpath(os.path.join(os.path.dirname(__file__), '..'))
-COZYFS_PATH = os.path.normpath(os.path.join(BASE_DIR, 'cozyfs', 'cozyfs.py'))
+#BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+#COZYFS_PATH = os.path.join(BASE_DIR, 'cozyfs', 'cozyfs.py')
+COZYFS_PATH = 'cozyfs.py'
 
 class TestCozyFSBackup(unittest.TestCase):
 
@@ -108,7 +109,7 @@ class TestCozyFSBackup(unittest.TestCase):
 
     def test_clone(self):
         self.backup.clone(1234567890)
-        self.assertEqual(self.subprocess.execute_string, 'Executing: /ext2-Space/home/peter/Projects/Cozy/cozyfs/cozyfssnapshot.py /the/backup/path 12345 1234567890')
+        self.assertEqual(self.subprocess.execute_string, 'Executing: cozyfssnapshot.py /the/backup/path 12345 1234567890')
 
     def test_get_previous_versions(self):
         self.fake_db_factory.set_fetchone_result(None)

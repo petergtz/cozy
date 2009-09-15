@@ -5,4 +5,6 @@ from within this directory on the command line:
 
 ln -s $PWD/cozy-restore-nautilus-extension.py ~/.nautilus/python-extensions/
 
+Also make sure that the cozyfs directory is in your path.
+
 No further installation steps needed.

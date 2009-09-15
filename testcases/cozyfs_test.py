@@ -8,19 +8,23 @@ import subprocess
 import sqlite3
 import stat
 
-TC_DIR = os.path.abspath(os.path.dirname(__file__))
-ROOT_DIR = os.path.join(TC_DIR, '..')
+TC_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(TC_DIR, 'SimpleCozyFSTestData')
+ROOT_DIR = os.path.dirname(TC_DIR)
 
 
 COZYFS_PATH = os.path.join(ROOT_DIR, 'cozyfs', 'cozyfs.py')
 MKFS_PATH = os.path.join(ROOT_DIR, 'cozyfs', 'mkfs.cozyfs.py')
 SNAPSHOT_PATH = os.path.join(ROOT_DIR, 'cozyfs', 'cozyfssnapshot.py')
 DBFILE = "fsdb"
-TARGET_DIR = '/home/peter/MyBackup'
+TARGET_DIR = os.path.expanduser('~/MyBackup')
 
 
 
 def make_cozyfs(target_dir, backup_id):
+    if not os.path.exists(TARGET_DIR):
+        print >> sys.stderr, 'Please provide the file:', TARGET_DIR
+
     cmdline = [MKFS_PATH, target_dir, str(backup_id)]
     print '### MAKING FS: ' + ' '.join(cmdline)
     try:
@@ -288,7 +292,7 @@ try:
     mount(mountpath, target_dir=TARGET_DIR, backup_id=666)#, version=version1)
     neg_mkdir('folder1')
     move('folder1', 'folder1_renamed')
-    copy(os.path.join(TC_DIR, 'file1'), 'file1')
+    copy(os.path.join(DATA_DIR, 'file1'), 'file1')
     move('file1', 'folder1_renamed/file1')
     umount(mountpath)
 
@@ -296,31 +300,31 @@ try:
 
     mount(mountpath, target_dir=TARGET_DIR, backup_id=666, version=version2)
     mkdirs('folder2/folder3')
-    copy(os.path.join(TC_DIR, 'file1'), 'file2')
-    copy(os.path.join(TC_DIR, 'file2'), './folder1_renamed/file1')
-    copy(os.path.join(TC_DIR, 'file1'), 'overwriter')
+    copy(os.path.join(DATA_DIR, 'file1'), 'file2')
+    copy(os.path.join(DATA_DIR, 'file2'), './folder1_renamed/file1')
+    copy(os.path.join(DATA_DIR, 'file1'), 'overwriter')
     umount(mountpath)
 
     version3 = snapshot(TARGET_DIR, '666', version2)
 
     mount(mountpath, target_dir=TARGET_DIR, backup_id=666, version=version3)
-    copy(os.path.join(TC_DIR, 'file1'), 'overwriter')
+    copy(os.path.join(DATA_DIR, 'file1'), 'overwriter')
 #    raw_input()
     mkdir('folder4')
     mkdir('folder5')
     rmtree('folder5')
     rm('folder1_renamed/file1')
-    copy(os.path.join(TC_DIR, 'image1.jpg'), 'image.jpg')
+    copy(os.path.join(DATA_DIR, 'image1.jpg'), 'image.jpg')
     hardlink('image.jpg', 'folder4/hardlink_to_image.jpg')
     rm('image.jpg')
-    compare_file_content(os.path.join(TC_DIR, 'image1.jpg'), 'folder4/hardlink_to_image.jpg')
+    compare_file_content(os.path.join(DATA_DIR, 'image1.jpg'), 'folder4/hardlink_to_image.jpg')
     softlink('folder4/hardlink_to_image.jpg', 'softlink_to_image.jpg')
     umount(mountpath)
 
     version4 = snapshot(TARGET_DIR, 666, version3)
 
     mount(mountpath, target_dir=TARGET_DIR, backup_id=666, version=version4)
-    compare_file_content(os.path.join(TC_DIR, 'image1.jpg'), 'folder4/hardlink_to_image.jpg')
+    compare_file_content(os.path.join(DATA_DIR, 'image1.jpg'), 'folder4/hardlink_to_image.jpg')
     compare_file_content('softlink_to_image.jpg', 'folder4/hardlink_to_image.jpg')
     umount(mountpath)
 

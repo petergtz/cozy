@@ -27,11 +27,14 @@ from cozyutils.date_helper import epoche2date, date2epoche
 
 DBFILE = 'fsdb'
 
-TC_DIR = os.path.abspath(os.path.dirname(__file__))
-BASE_DIR = os.path.normpath(os.path.join(TC_DIR, '..'))
-COZY_MKFS_PATH = os.path.join(BASE_DIR, 'cozyfs/mkfs.cozyfs.py')
-COZYFS_PATH = os.path.join(BASE_DIR, 'cozyfs/cozyfs.py')
-COZYFSSNAPHOT_PATH = os.path.join(BASE_DIR, 'cozyfs/cozyfssnapshot.py')
+#PACKAGE_DIR = os.path.dirname(__file__)
+#BASE_DIR = os.path.dirname(PACKAGE_DIR)
+#COZY_MKFS_PATH = os.path.join(BASE_DIR, 'cozyfs/mkfs.cozyfs.py')
+#COZYFS_PATH = os.path.join(BASE_DIR, 'cozyfs/cozyfs.py')
+#COZYFSSNAPHOT_PATH = os.path.join(BASE_DIR, 'cozyfs/cozyfssnapshot.py')
+COZY_MKFS_PATH = 'mkfs.cozyfs.py'
+COZYFS_PATH = 'cozyfs.py'
+COZYFSSNAPHOT_PATH = 'cozyfssnapshot.py'
 
 class CozyFSBackup(Backup):
 

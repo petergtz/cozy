@@ -16,12 +16,13 @@
 
 import subprocess
 import os
-
+from os.path import dirname, join as join_path
 
 class FileSystem(object):
 
-    def __init__(self, mount_point):
+    def __init__(self, mount_point, os_=os):
         self.__mount_point = mount_point
+        self.os = os_
 
     def __del__(self):
         self._unmount()
@@ -39,13 +40,13 @@ class FileSystem(object):
             subprocess.call(['fusermount', '-z', '-u', self.mount_point])
 
     def _remove_mount_point_dir(self):
-        if os.path.exists(self.mount_point):
-            os.rmdir(self.mount_point)
-        if os.path.exists(os.path.dirname(self.mount_point)) and len(os.listdir(os.path.dirname(self.mount_point))) == 0:
-            os.rmdir(os.path.dirname(self.mount_point))
+        if self.os.path.exists(self.mount_point):
+            self.os.rmdir(self.mount_point)
+        if self.os.path.exists(dirname(self.mount_point)) and len(self.os.listdir(dirname(self.mount_point))) == 0:
+            self.os.rmdir(os.path.dirname(self.mount_point))
 
     def _is_mounted(self):
-        return os.path.exists(self.mount_point) and os.path.ismount(self.mount_point)
+        return self.os.path.exists(self.mount_point) and self.os.path.ismount(self.mount_point)
 
     def __get_mount_point(self):
         return self.__mount_point
@@ -53,7 +54,7 @@ class FileSystem(object):
     mount_point = property(__get_mount_point)
 
     def has_relative_path(self, relative_path):
-        return os.path.exists(os.path.join(self.mount_point, relative_path))
+        return self.os.path.exists(join_path(self.mount_point, relative_path))
 
     def full_path_from(self, relative_path):
-        return os.path.join(self.mount_point, relative_path)
+        return join_path(self.mount_point, relative_path)

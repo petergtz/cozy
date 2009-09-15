@@ -2,17 +2,16 @@
 
 from __future__ import with_statement
 
+import sys
+sys.path.append('/home/peter/Projects/Cozy')
+
+
 import unittest
-from pymock import *
 import cozy.filesystem
 
-
-class MockOS:
-    def __init__(self, paths=[]):
+class MockPath:
+    def __init__(self, paths):
         self.paths = paths
-
-    def rmdir(self, path):
-        del self.paths[self.paths.index(path)]
 
     def ismount(self, path):
         return True
@@ -23,6 +22,15 @@ class MockOS:
             return True
         except:
             return False
+
+class MockOS:
+    def __init__(self, paths=[]):
+        self.paths = paths
+        self.path = MockPath(self.paths)
+
+    def rmdir(self, path):
+        del self.paths[self.paths.index(path)]
+
 
     def listdir(self, path):
         return []
@@ -35,29 +43,28 @@ class TestFileSystem(unittest.TestCase):
 
     def setUp(self):
         self.mock_os = MockOS(['/path/to/mountpoint', '/path/to/mountpoint/rel_path', '/path/to' ])
-        cozy.filesystem.os.rmdir = self.mock_os.rmdir
-        cozy.filesystem.os.listdir = self.mock_os.listdir
-        cozy.filesystem.os.path.ismount = self.mock_os.ismount
-        cozy.filesystem.os.path.exists = self.mock_os.exists
         cozy.filesystem.subprocess.call = stubbed_call
-
+#
     def test_init_delete(self):
-        self.filesystem = cozy.filesystem.FileSystem('/path/to/mountpoint')
+        self.filesystem = cozy.filesystem.FileSystem('/path/to/mountpoint', self.mock_os)
         del self.filesystem
 
     def test_enter_exit(self):
-        with cozy.filesystem.FileSystem('/path/to/mountpoint') as self.filesystem:
+        with cozy.filesystem.FileSystem('/path/to/mountpoint', self.mock_os) as self.filesystem:
             pass
         del self.filesystem
 
     def test_has_relative_path(self):
-        filesystem = cozy.filesystem.FileSystem('/path/to/mountpoint')
+        filesystem = cozy.filesystem.FileSystem('/path/to/mountpoint', self.mock_os)
         self.assertFalse(filesystem.has_relative_path('rel_path/not_existing'))
         self.assertTrue(filesystem.has_relative_path('rel_path'))
 
     def test_full_path_from(self):
         filesystem = cozy.filesystem.FileSystem('/path/to/mountpoint')
         self.assertEqual(filesystem.full_path_from('my/rel/path'), '/path/to/mountpoint/my/rel/path')
+
+    def testdummy(self):
+        self.assert_(True)
 
 
 if __name__ == '__main__':
