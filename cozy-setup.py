@@ -32,7 +32,8 @@ import time
 
 import re
 
-from cozy.backuplocation import PathBasedBackupLocation, RemoveableBackupLocation
+from cozy.pathbasedbackuplocation import PathBasedBackupLocation
+from cozy.removeablebackuplocation import RemoveableBackupLocation
 from cozy.locationmanager import LocationManager
 import dbus
 

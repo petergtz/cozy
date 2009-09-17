@@ -84,13 +84,16 @@ class CozyFSBackup(Backup):
         else:
             return False
 
-    def __handle_return_code(self, return_code):
-        if  return_code == 3:
+    def __handle_return_code_of(self, process):
+        if  process.returncode == 3:
             raise Backup.MountException('Error: Mount failed because database couldn''t be found.')
-        elif  return_code == 4:
+        elif  process.returncode == 4:
             raise Backup.MountException('Error: Mount failed because filesystem is locked.')
         else:
-            raise Backup.MountException('Error: Mount failed due to unknown reasons.')
+            (stdoutdata, stderrdata) = process.communicate()
+            #raise Backup.MountException('Error: Mount cmd : ' + ' '.join(process.args) + 'failed due to errors: ' + str(stderrdata))
+            print 'Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: '
+            raise Backup.MountException('Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: ' + stderrdata + stdoutdata)
 
     def __build_cmdline(self, mount_point, version):
         cmdline = [COZYFS_PATH, mount_point, '-o', 'target_dir=' + self.backup_path + ',backup_id=' + str(self.backup_id), '-f']
@@ -99,10 +102,11 @@ class CozyFSBackup(Backup):
 
     def __mount_cozyfs(self, mount_point, version):
         cmdline = self.__build_cmdline(mount_point, version)
-        process = self.subprocess_factory.Popen(cmdline)
+        process = self.subprocess_factory.Popen(cmdline, stderr=self.subprocess_factory.PIPE, stdout=self.subprocess_factory.PIPE)
         sleep(2)
         if not self.__is_process_running(process):
-            self.__handle_return_code(process.returncode)
+            process.args = cmdline
+            self.__handle_return_code_of(process)
 
     def mount(self, version):
         mount_point = os.path.join(self._temp_dir(), epoche2date(version))

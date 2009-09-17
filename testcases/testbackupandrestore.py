@@ -284,7 +284,7 @@ class CozyBackup:
 #        subprocess.call([COZY_LOCATION_MANAGER, 'stop'])
 
 
-with Setup() as setup:
+with Setup():
     with CozyBackup() as cozy_backup:
 
         with DataHandler(DATA) as data_handler:

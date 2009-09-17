@@ -20,6 +20,13 @@ from optparse import OptionParser
 
 from cozy.back_up import back_up
 
+import sys
+import os
+if os.environ.has_key('PYTHONPATH'):
+    os.environ['PYTHONPATH'] = os.environ['PYTHONPATH'] + ':' + os.path.dirname(os.path.abspath(__file__))
+else:
+    os.environ['PYTHONPATH'] = os.path.dirname(os.path.abspath(__file__))
+
 
 if __name__ == '__main__':
 

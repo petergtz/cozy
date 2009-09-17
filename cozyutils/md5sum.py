@@ -1,28 +1,23 @@
-import hashlib
-import sys
+from __future__ import with_statement
+
+from hashlib import md5
 
 def sumfile(fobj):
-	'''Returns an md5 hash for an object with read() method.'''
-	m = hashlib.md5()
-	while True:
-		d = fobj.read(8096)
-		if not d:
-			break
-		m.update(d)
-	return m.hexdigest()
+    '''Returns an md5 hash for an object with read() method.'''
+    m = md5()
+    while True:
+        d = fobj.read(8096)
+        if not d:
+            break
+        m.update(d)
+    return m.hexdigest()
 
 
 def md5sum(fname):
-    '''Returns an md5 hash for file fname, or stdin if fname is "-".'''
-    if fname == '-':
-        ret = sumfile(sys.stdin)
-    else:
-        f = file(fname, 'rb')
+    '''Returns an md5 hash for file fname'''
+    with open(fname, 'rb') as f:
         ret = sumfile(f)
-        f.close()
     return ret
 
 def md5sum_from_string(string):
-	m = hashlib.md5()
-	m.update(string)
-	return m.hexdigest()
+    return md5(string).hexdigest()
