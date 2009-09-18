@@ -58,24 +58,55 @@ class ChangeChangesFileUpdateStrategy(FileUpdateStrategy):
         os.chown(dst, src_stat.st_uid, src_stat.st_gid)
         os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
 
+    def __create_if_not_existent(self, src, dst):
+        if not os.path.exists(dst):
+            shutil.copy(src, dst)
+            self.logger.info(info_string + 'Copied')
+            return True
+        else:
+            return False
+
+    def __update_content(self, src, dst):
+        if (src_stat.st_size != dst_stat.st_size or
+            cozyutils.md5sum.md5sum(src) != cozyutils.md5sum.md5sum(dst)):
+            self.logger.debug(info_string + 'file content changed')
+            shutil.copy(src, dst)
+            return True
+        else:
+            return False
+
+    def __update_mode(self, src, src_stat, dst, dst_stat):
+            if src_stat.st_mode != dst_stat.st_mode:
+                self.logger.debug(info_string + 'source-mode(%d) != target-mode(%d)', src_stat.st_mode, dst_stat.st_mode)
+                os.chmod(dst, src_stat.st_mode)
+                return True
+            else:
+                return False
+
+    def __update_owner(self, src, src_stat, dst, dst_stat):
+            if src_stat.st_gid != dst_stat.st_gid or src_stat.st_uid != dst_stat.st_uid:
+                self.logger.debug(info_string + 'source-GID(%d) != target-GID(%d) or source-UID(%d) != target-UID(%d)',
+                                  src_stat.st_gid, dst_stat.st_gid, src_stat.st_uid, dst_stat.st_uid)
+                os.chown(dst, src_stat.st_uid, src_stat.st_gid)
+                return
+
     def update_file(self, src, dst):
         self.__assert_writing_to_write_path(dst)
         info_string = 'File: ' + src + ': '
         try:
             src_stat = os.stat(src)
 
-            if not os.path.exists(dst):
-                self.__copy_file(src, src_stat, dst)
-                self.logger.info(info_string + 'Copied')
-                return
-
+            updated_content = self.__create_if_not_existent(src, dst) or self.__update_content(src, dst)
             dst_stat = os.stat(dst)
+            updated_mode = self.__update_mode(src, src_stat, dst, dst_stat)
+            updated_owner = self.__update_owner(src, src_stat, dst, dst_stat)
+
+            if not (updated_content or updated_mode or updated_owner):
+                self.logger.debug(info_string + 'Skipped')
+
             skipped = True
-            if src_stat.st_size != dst_stat.st_size:
-                self.logger.debug(info_string + 'source-size(%d) != target-size(%d)', src_stat.st_size, dst_stat.st_size)
-                self.__copy_file(src, src_stat, dst)
-                skipped = False
-            elif cozyutils.md5sum.md5sum(src) != cozyutils.md5sum.md5sum(dst):
+            if (src_stat.st_size != dst_stat.st_size or
+                cozyutils.md5sum.md5sum(src) != cozyutils.md5sum.md5sum(dst)):
                 self.logger.debug(info_string + 'file content changed')
                 self.__copy_file(src, src_stat, dst)
                 skipped = False
