@@ -52,79 +52,84 @@ class ChangeChangesFileUpdateStrategy(FileUpdateStrategy):
             self.logger.critical(write_on_user_data_string + path)
             raise Exception(write_on_user_data_string + path)
 
-    def __copy_file(self, src, src_stat, dst):
-        shutil.copy(src, dst)
-        os.chmod(dst, src_stat.st_mode)
-        os.chown(dst, src_stat.st_uid, src_stat.st_gid)
-        os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
-
-    def __create_if_not_existent(self, src, dst):
+    def __create_file_if_not_existent(self, src, src_stat, dst):
         if not os.path.exists(dst):
             shutil.copy(src, dst)
-            self.logger.info(info_string + 'Copied')
+            os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
+            self.logger.debug("File: %s: Created.")
             return True
         else:
             return False
 
-    def __update_content(self, src, dst):
+    def __create_dir_if_not_existent(self, src, src_stat, dst):
+        if not os.path.exists(dst):
+            os.mkdir(dst)
+            os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
+            self.logger.debug("Dir: %s: Created.")
+            return True
+        else:
+            return False
+
+    def __create_symlink_if_not_existent(self, dst, linkto):
+        if not os.path.lexists(dst):
+            os.symlink(linkto, dst)
+            self.logger.debug("Symlink: %s: Created.")
+            return True
+        else:
+            return False
+
+    def __sync_file_content(self, src, src_stat, dst, dst_stat):
         if (src_stat.st_size != dst_stat.st_size or
             cozyutils.md5sum.md5sum(src) != cozyutils.md5sum.md5sum(dst)):
-            self.logger.debug(info_string + 'file content changed')
             shutil.copy(src, dst)
+            os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
+            self.logger.debug("File: %s: updated file content.")
             return True
         else:
             return False
 
-    def __update_mode(self, src, src_stat, dst, dst_stat):
-            if src_stat.st_mode != dst_stat.st_mode:
-                self.logger.debug(info_string + 'source-mode(%d) != target-mode(%d)', src_stat.st_mode, dst_stat.st_mode)
-                os.chmod(dst, src_stat.st_mode)
-                return True
-            else:
-                return False
+    def __sync_symlink_target(self, dst, linkto):
+        if not os.path.islink(dst) or os.readlink(dst) != linkto:
+            os.remove(dst)
+            os.symlink(linkto, dst)
+            self.logger.debug(info_string + 'symlink targets different')
+            self.logger.info(info_string + 'Updated')
+            return True
+        else:
+            return False
 
-    def __update_owner(self, src, src_stat, dst, dst_stat):
-            if src_stat.st_gid != dst_stat.st_gid or src_stat.st_uid != dst_stat.st_uid:
-                self.logger.debug(info_string + 'source-GID(%d) != target-GID(%d) or source-UID(%d) != target-UID(%d)',
-                                  src_stat.st_gid, dst_stat.st_gid, src_stat.st_uid, dst_stat.st_uid)
-                os.chown(dst, src_stat.st_uid, src_stat.st_gid)
-                return
+    def __sync_mode(self, src, src_stat, dst, dst_stat):
+        if src_stat.st_mode != dst_stat.st_mode:
+            os.chmod(dst, src_stat.st_mode)
+            self.logger.debug("File: %s: updated mode from %d to %d.", dst, dst_stat.st_mode, src_stat.st_mode)
+            return True
+        else:
+            return False
+
+    def __sync_owner(self, src, src_stat, dst, dst_stat):
+        if src_stat.st_gid != dst_stat.st_gid or src_stat.st_uid != dst_stat.st_uid:
+            os.chown(dst, src_stat.st_uid, src_stat.st_gid)
+            self.logger.debug("File: %s: updated owner from %d:%d to %d:%d.", src,
+                              dst_stat.st_uid, dst_stat.st_gid, src_stat.st_uid, src_stat.st_gid)
+            return True
+        else:
+            return False
 
     def update_file(self, src, dst):
         self.__assert_writing_to_write_path(dst)
-        info_string = 'File: ' + src + ': '
         try:
             src_stat = os.stat(src)
 
-            updated_content = self.__create_if_not_existent(src, dst) or self.__update_content(src, dst)
+            created_file = self.__create_file_if_not_existent(src, src_stat, dst)
             dst_stat = os.stat(dst)
-            updated_mode = self.__update_mode(src, src_stat, dst, dst_stat)
-            updated_owner = self.__update_owner(src, src_stat, dst, dst_stat)
+            updated_content = created_file or self.__sync_file_content(src, src_stat, dst, dst_stat)
+            updated_mode = self.__sync_mode(src, src_stat, dst, dst_stat)
+            updated_owner = self.__sync_owner(src, src_stat, dst, dst_stat)
 
-            if not (updated_content or updated_mode or updated_owner):
-                self.logger.debug(info_string + 'Skipped')
-
-            skipped = True
-            if (src_stat.st_size != dst_stat.st_size or
-                cozyutils.md5sum.md5sum(src) != cozyutils.md5sum.md5sum(dst)):
-                self.logger.debug(info_string + 'file content changed')
-                self.__copy_file(src, src_stat, dst)
-                skipped = False
-            if src_stat.st_mode != dst_stat.st_mode:
-                self.logger.debug(info_string + 'source-mode(%d) != target-mode(%d)', src_stat.st_mode, dst_stat.st_mode)
-                os.chmod(dst, src_stat.st_mode)
-                skipped = False
-            if src_stat.st_gid != dst_stat.st_gid or src_stat.st_uid != dst_stat.st_uid:
-                self.logger.debug(info_string + 'source-GID(%d) != target-GID(%d) or source-UID(%d) != target-UID(%d)',
-                                  src_stat.st_gid, dst_stat.st_gid, src_stat.st_uid, dst_stat.st_uid)
-                os.chown(dst, src_stat.st_uid, src_stat.st_gid)
-                skipped = False
-    # TODO: IMPORTANT: FILE CONTENT WAS NOT COMPARED!!!            
-
-            if skipped:
-                self.logger.debug(info_string + 'Skipped')
+            if created_file or updated_content or updated_mode or updated_owner:
+                self.logger.info('File: %s: Updated', src)
             else:
-                self.logger.info(info_string + 'Updated')
+                self.logger.debug('File: %s: Skipped', src)
 
                     # Note: if we use ctime as a comparison, the backup will always be done for all files
                     # because ctime will never be the same, since we're changing it directly after we
@@ -134,40 +139,25 @@ class ChangeChangesFileUpdateStrategy(FileUpdateStrategy):
     #                and src_stat.st_mtime == dst_stat.st_mtime
                     # we're not interested in comparing atime, because that's the access time. Only accessing it, does not mean we need to back it up
         except Exception, e:
-            self.logger.error(info_string + str(e))
+            self.logger.error('File: ' + src + ': ' + str(e))
 
 
     def update_symlink(self, src, dst):
         self.__assert_writing_to_write_path(dst)
-
-        info_string = 'Symlink: ' + src + ': '
-
         try:
             linkto = os.readlink(src)
-            info_string += 'pointing to: ' + linkto + ': '
             src_stat = os.lstat(src)
 
-            if not os.path.lexists(dst):
-                os.symlink(linkto, dst)
-                os.lchown(dst, src_stat.st_uid, src_stat.st_gid)
-                self.logger.info(info_string + 'Copied')
-                return
-            if not os.path.islink(dst) or os.readlink(dst) != linkto:
-                os.remove(dst)
-                os.symlink(linkto, dst)
-                os.lchown(dst, src_stat.st_uid, src_stat.st_gid)
-                self.logger.debug(info_string + 'symlink targets different')
-                self.logger.info(info_string + 'Updated')
-                return
-            dst_stat = os.lstat(dst)
-            if dst_stat.st_gid != src_stat.st_gid or dst_stat.st_uid != src_stat.st_uid:
-                os.lchown(dst, src_stat.st_uid, src_stat.st_gid)
-                self.logger.debug(info_string + 'source-GID(%d) != target-GID(%d) or source-UID(%d) != target-UID(%d)',
-                                  rc_stat.st_gid, dst_stat.st_gid, rc_stat.st_uid, dst_stat.st_uid)
-                self.logger.info(info_string + 'Updated')
-                return
+            updated_symlink_target = self.__create_symlink_if_not_existent(dst, linkto) or \
+                                     self.__sync_symlink_target(dst, linkto)
 
-            self.logger.debug(info_string + 'Skipped')
+            dst_stat = os.lstat(dst)
+            updated_owner = self.__sync_owner(src, src_stat, dst, dst_stat)
+
+            if updated_symlink_target or updated_owner:
+                self.logger.info('Symlink: %s: Updated', src)
+            else:
+                self.logger.debug('Symlink: %s: Skipped', src)
 
     # new in python 2.6:    
     #    os.lchmod(dst, src_stat.st_mode)
@@ -177,57 +167,41 @@ class ChangeChangesFileUpdateStrategy(FileUpdateStrategy):
 #        os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
 
         except Exception, e:
-            self.logger.exception(info_string + str(e))
+            self.logger.error('Symlink: ' + src + ': ' + str(e))
+
 
 
     def update_dir(self, src, dst):
         self.__assert_writing_to_write_path(dst)
-        info_string = 'Dir: ' + src + ': '
         try:
             src_stat = os.stat(src)
-
-            if not os.path.exists(dst):
-                os.mkdir(dst)
-                os.chmod(dst, src_stat.st_mode)
-                os.chown(dst, src_stat.st_uid, src_stat.st_gid)
-                os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
-                self.logger.info(info_string + 'Created')
-                return
-
+            created_dir = self.__create_dir_if_not_existent(src, src_stat, dst)
             dst_stat = os.stat(dst)
-            skipped = True
-            if src_stat.st_mode != dst_stat.st_mode:
-                self.logger.debug(info_string + 'source-mode(%d) != target-mode(%d)', rc_stat.st_mode, dst_stat.st_mode)
-                os.chmod(dst, src_stat.st_mode)
-                skipped = False
-            if src_stat.st_gid != dst_stat.st_gid or src_stat.st_uid != dst_stat.st_uid:
-                self.logger.debug(info_string + 'source-GID(%d) != target-GID(%d) or source-UID(%d) != target-UID(%d)',
-                                  rc_stat.st_gid, dst_stat.st_gid, rc_stat.st_uid, dst_stat.st_uid)
-                os.chown(dst, src_stat.st_uid, src_stat.st_gid)
-                skipped = False
+            updated_mode = self.__sync_mode(src, src_stat, dst, dst_stat)
+            updated_owner = self.__sync_owner(src, src_stat, dst, dst_stat)
 
-            if skipped:
-                self.logger.debug(info_string + 'Skipped')
+            if created_dir or updated_mode or updated_owner:
+                self.logger.info('File: %s: Updated', src)
             else:
-                self.logger.info(info_string + 'Updated')
+                self.logger.debug('File: %s: Skipped', src)
 
         except Exception, e:
-            self.logger.exception(str(e))
+            self.logger.exception('Error updating dir: ' + dst + ': ' + str(e))
 
     def remove(self, path):
         self.__assert_writing_to_write_path(path)
 
-        self.logger.info('Removing file in target: ' + path)
         try:
             os.remove(path)
+            self.logger.info('Removed file in target: ' + path)
         except Exception, e:
-            self.logger.error(str(e))
+            self.logger.error('Error removing file: ' + path + ': ' + str(e))
 
     def remove_dir(self, path):
         self.__assert_writing_to_write_path(path)
 
-        self.logger.info('Removing dir in target: ' + path)
         try:
             shutil.rmtree(path)
+            self.logger.info('Removed dir in target: ' + path)
         except Exception, e:
-            self.logger.error(str(e))
+            self.logger.error('Error removing dir: ' + path + ': ' + str(e))
