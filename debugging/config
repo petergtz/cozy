@@ -1,0 +1,51 @@
+[loggers]
+keys=root,BackupLogger
+
+[handlers]
+keys=DebugHandler,InfoHandler,ErrorHandler,ConsoleHandler
+
+[formatters]
+keys=BackupFormatter
+
+
+[logger_root]
+level=DEBUG
+handlers=
+
+# Careful: qualname is the name with which getLogger loads the logger
+[logger_BackupLogger]
+level=DEBUG
+handlers=ConsoleHandler,DebugHandler,InfoHandler,ErrorHandler
+qualname=cozy.backup
+propagate=0
+
+
+[handler_ConsoleHandler]
+class=StreamHandler
+level=INFO
+formatter=BackupFormatter
+args=(sys.stdout,)
+
+[handler_DebugHandler]
+class=FileHandler
+level=DEBUG
+formatter=BackupFormatter
+args=('/tmp/cozy-backup-debug.log', 'a')
+
+[handler_InfoHandler]
+class=FileHandler
+level=INFO
+formatter=BackupFormatter
+args=('/tmp/cozy-backup-info.log', 'a')
+
+[handler_ErrorHandler]
+class=FileHandler
+level=ERROR
+formatter=BackupFormatter
+args=('/tmp/cozy-backup-error.log', 'a')
+
+
+
+[formatter_BackupFormatter]
+format=%(asctime)s - %(name)s - %(levelname)s - %(message)s
+datefmt=
