@@ -92,7 +92,7 @@ class CozyFSBackup(Backup):
         else:
             (stdoutdata, stderrdata) = process.communicate()
             #raise Backup.MountException('Error: Mount cmd : ' + ' '.join(process.args) + 'failed due to errors: ' + str(stderrdata))
-            print 'Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: '
+#            print 'Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: '
             raise Backup.MountException('Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: ' + stderrdata + stdoutdata)
 
     def __build_cmdline(self, mount_point, version):

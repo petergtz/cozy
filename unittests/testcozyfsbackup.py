@@ -7,17 +7,22 @@ import cozy.cozyfsbackup
 from cozy.filesystem import FileSystem
 
 class MockSubprocessModule:
+    PIPE = 'pipe_dummy'
+
     def call(self, cmd):
         self.execute_string = 'Executing: ' + ' '.join(cmd)
         return self.returncode
 
-    def Popen(self, cmd):
+    def Popen(self, cmd, stderr='std_dummy', stdout='std_dummy'):
         self.mock_process.execute_string = 'Executing: ' + ' '.join(cmd)
         return self.mock_process
 
 class MockProcess:
     def poll(self):
         return self.returncode
+
+    def communicate(self):
+        return ('stderror', 'stdout')
 
 
 class CozyFSBackupStubbed(cozy.cozyfsbackup.CozyFSBackup):

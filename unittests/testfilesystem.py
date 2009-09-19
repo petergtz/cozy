@@ -63,8 +63,6 @@ class TestFileSystem(unittest.TestCase):
         filesystem = cozy.filesystem.FileSystem('/path/to/mountpoint')
         self.assertEqual(filesystem.full_path_from('my/rel/path'), '/path/to/mountpoint/my/rel/path')
 
-    def testdummy(self):
-        self.assert_(True)
 
 
 if __name__ == '__main__':
