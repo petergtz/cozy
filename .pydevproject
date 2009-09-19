@@ -8,4 +8,7 @@
 <pydev_pathproperty name="org.python.pydev.PROJECT_EXTERNAL_SOURCE_PATH">
 <path>/usr/lib/python-support/python-gtk2/python2.5/gtk-2.0</path>
 </pydev_pathproperty>
+<pydev_pathproperty name="org.python.pydev.PROJECT_SOURCE_PATH">
+<path>/Cozy</path>
+</pydev_pathproperty>
 </pydev_project>
