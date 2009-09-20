@@ -124,6 +124,23 @@ class TestCozyFSBackup(unittest.TestCase):
         self.assertEqual(filesystem.mount_point, self.expected_mount_point)
         self.assertTrue(isinstance(filesystem, FileSystem))
 
+    def test_mount_readonly(self):
+
+        self.subprocess.mock_process = MockProcess()
+        self.subprocess.mock_process.returncode = None
+
+        filesystem = self.backup.mount(1234567890, as_readonly=True)
+        filesystem._FileSystem__unmount = stub
+        filesystem._FileSystem__remove_mount_point_dir = stub
+
+        self.expected_mount_point = '/a/tempfile/generated/dir/2009-02-14_00-31-30'
+        self.expected_mount_command = COZYFS_PATH + ' /a/tempfile/generated/dir/2009-02-14_00-31-30 -o target_dir=/the/backup/path,backup_id=12345,version=1234567890,ro -f'
+
+        self.assertEqual(self.subprocess.mock_process.execute_string, 'Executing: ' + self.expected_mount_command)
+        self.assertEqual(self.backup.mount_point_to_make, self.expected_mount_point)
+        self.assertEqual(filesystem.mount_point, self.expected_mount_point)
+        self.assertTrue(isinstance(filesystem, FileSystem))
+
 
     def test_clone(self):
         self.backup.clone(1234567890)

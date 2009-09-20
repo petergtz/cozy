@@ -95,23 +95,25 @@ class CozyFSBackup(Backup):
 #            print 'Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: '
             raise Backup.MountException('Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: ' + stderrdata + stdoutdata)
 
-    def __build_cmdline(self, mount_point, version):
+    def __build_cmdline(self, mount_point, version, as_readonly):
         cmdline = [COZYFS_PATH, mount_point, '-o', 'target_dir=' + self.backup_path + ',backup_id=' + str(self.backup_id), '-f']
         cmdline[-2] = cmdline[-2] + ',version=' + str(version)
+        if as_readonly:
+            cmdline[-2] = cmdline[-2] + ',ro'
         return cmdline
 
-    def __mount_cozyfs(self, mount_point, version):
-        cmdline = self.__build_cmdline(mount_point, version)
+    def __mount_cozyfs(self, mount_point, version, as_readonly):
+        cmdline = self.__build_cmdline(mount_point, version, as_readonly)
         process = self.subprocess_factory.Popen(cmdline, stderr=self.subprocess_factory.PIPE, stdout=self.subprocess_factory.PIPE)
         sleep(2)
         if not self.__is_process_running(process):
             process.args = cmdline
             self.__handle_return_code_of(process)
 
-    def mount(self, version):
+    def mount(self, version, as_readonly=False):
         mount_point = os.path.join(self._temp_dir(), epoche2date(version))
         self.__make_mount_point_dir(mount_point)
-        self.__mount_cozyfs(mount_point, version)
+        self.__mount_cozyfs(mount_point, version, as_readonly)
         return FileSystem(mount_point)
 
 

@@ -36,18 +36,18 @@ class Backup(object):
             self.__temp_mount_dir = tempfile.mkdtemp(prefix='cozy-' + loginname)
         return self.__temp_mount_dir
 
-    def mount(self, version):
+    def mount(self, version, as_readonly=False):
         ''' 
         mounts a filesystem and returns Backup object that holds its mount point 
         '''
         raise NotImplementedError()
 
 
-    def mount_latest(self):
+    def mount_latest(self, as_readonly=False):
         '''
         mounts a filesystem and returns Backup object that holds its mount point 
         '''
-        return self.mount(self.get_latest_version())
+        return self.mount(self.get_latest_version(), as_readonly)
 
     def clone(self, version):
         '''

@@ -133,6 +133,9 @@ class CozyFS(fuse.Fuse):
         if cursor.fetchone() == None:
             self.readonly = False
 
+        if hasattr(self, 'ro'):
+            self.readonly = True
+
         if self.readonly == False:
             self.lockfile = os.path.join(self.target_dir, 'lock')
             if os.path.exists(self.lockfile):
