@@ -22,6 +22,9 @@ import sys
 
 import dbus
 
+import urllib
+import urlparse
+
 class CozyRestoreNautilusExtension(nautilus.MenuProvider):
 
     def __init__(self):
@@ -73,10 +76,10 @@ class CozyRestoreNautilusExtension(nautilus.MenuProvider):
     def get_toolbar_items(self, window, path):
         return self.__get_toolbar_items(window, path, dbus.SessionBus())
 
-    def __get_toolbar_items(self, window, path, session_bus):
+    def __get_toolbar_items(self, window, uri, session_bus):
         items = []
 
-        path = path.get_uri().replace('file://', '')
+        path = urlparse.urlsplit(urllib.unquote(uri.get_uri()))[2]
 
         try:
             self.manager_object = session_bus.get_object('org.freedesktop.Cozy.RestoreBackend', '/org/freedesktop/Cozy/RestoreBackend')

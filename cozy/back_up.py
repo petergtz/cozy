@@ -99,6 +99,7 @@ def back_up():
         backup.clone_latest()
 
         with backup.mount_latest() as mounted_filesystem:
+            time.sleep(1)
             logger.info('Backing up data from ' + config.data_path + ' to ' + mounted_filesystem.mount_point + ': ')
 
             file_update_strategy = backup.get_file_update_strategy(mounted_filesystem, logger)
