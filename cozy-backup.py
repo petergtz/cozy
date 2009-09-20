@@ -27,6 +27,11 @@ if os.environ.has_key('PYTHONPATH'):
 else:
     os.environ['PYTHONPATH'] = os.path.dirname(os.path.abspath(__file__))
 
+if os.environ.has_key('PATH'):
+    os.environ['PATH'] = os.environ['PATH'] + ':' + os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cozyfs')
+else:
+    os.environ['PATH'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cozyfs')
+
 
 if __name__ == '__main__':
 

@@ -214,7 +214,8 @@ class DataHandler:
 
 
     def __exit__(self, type, value, traceback):
-        shutil.rmtree(self.data_dir)
+        if os.path.exists(self.data_dir):
+            shutil.rmtree(self.data_dir)
         for change_number in range(len(self.changes) + 1):
             if os.path.lexists(self.data_dir + str(change_number)):
                 shutil.rmtree(self.data_dir + str(change_number))

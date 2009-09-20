@@ -96,6 +96,8 @@ def back_up():
         backup = backup_provider.get_backup(backup_location.get_path(), config)
         logger.info('Version Number: %d', backup.get_latest_version())
 
+        backup.clone_latest()
+
         with backup.mount_latest() as mounted_filesystem:
             logger.info('Backing up data from ' + config.data_path + ' to ' + mounted_filesystem.mount_point + ': ')
 
@@ -103,9 +105,7 @@ def back_up():
 
             sync(config.data_path, mounted_filesystem.mount_point, file_update_strategy)
 
-        time.sleep(1)
-
-        backup.clone_latest()
+#        time.sleep(1)
 
         logger.info('ENDING BACKUP SESSION properly with new version number: %d', backup.get_latest_version())
 

@@ -122,18 +122,16 @@ class CozyFSBackup(Backup):
 
     def get_latest_version(self):
         latest_version = self.db.execute("select max(version) from Versions where backup_id=?", (self.backup_id,)).fetchone()[0]
-        assert latest_version is not None
         return latest_version
 
     def _get_base_version_of(self, current_version):
-        result = self.db.execute("select based_on_version from Versions where backup_id=? and version=?", (self.backup_id, current_version)).fetchone()
-        assert result is not None
-        base_version = result[0]
+        row = self.db.execute("select based_on_version from Versions where backup_id=? and version=?", (self.backup_id, current_version)).fetchone()
+        base_version = row[0]
         return base_version
 
     def _get_version_with(self, base_version):
-        ret = self.db.execute("select version from Versions where backup_id=? and based_on_version=?", (self.backup_id, base_version)).fetchone()
-        if ret is None:
+        row = self.db.execute("select version from Versions where backup_id=? and based_on_version=?", (self.backup_id, base_version)).fetchone()
+        if row is None:
             return None
-        return ret[0]
+        return row[0]
 
