@@ -30,7 +30,7 @@ class PlainFSBackup(Backup):
 
     def __init__(self, backup_path, backup_id):
         Backup.__init__(self, backup_path, backup_id)
-        if not os.path.exists(os.path.join(self.backup_path, str(self.backup_id))):
+        if not os.path.exists(os.path.join(self.backup_path, str(self.backup_id), str(0))):
             os.makedirs(os.path.join(self.backup_path, str(self.backup_id), str(0)))
 
 
