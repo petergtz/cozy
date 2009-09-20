@@ -16,6 +16,7 @@
 
 import cozyfsbackup
 import plainfsbackup
+import hardlinkedfsbackup
 
 class BackupProvider:
 
@@ -24,5 +25,7 @@ class BackupProvider:
             return plainfsbackup.PlainFSBackup(backup_path, config.backup_id)
         elif config.backup_type == 'CozyFS':
             return cozyfsbackup.CozyFSBackup(backup_path, config.backup_id)
+        elif config.backup_type == 'HardlinkedFS':
+            return hardlinkedfsbackup.HardlinkedFSBackup(backup_path, config.backup_id)
         else:
             raise Exception('Backup type does not exist')

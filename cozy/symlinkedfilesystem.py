@@ -21,11 +21,11 @@ class SymlinkedFileSystem(FileSystem):
     def _unmount(self):
        pass
 
-    def _remove_mount_point_dir(self, mount_point):
-        if os.path.exists(mount_point):
-            os.unlink(mount_point)
-        if os.path.exists(os.path.dirname(mount_point)) and len(os.listdir(os.path.dirname(mount_point))) == 0:
-            os.rmdir(os.path.dirname(mount_point))
+    def _remove_mount_point_dir(self):
+        if os.path.exists(self.mount_point):
+            os.unlink(self.mount_point)
+        if os.path.exists(os.path.dirname(self.mount_point)) and len(os.listdir(os.path.dirname(self.mount_point))) == 0:
+            os.rmdir(os.path.dirname(self.mount_point))
 
     def _is_mounted(self):
         return os.path.exists(self.mount_point)

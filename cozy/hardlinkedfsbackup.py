@@ -19,56 +19,33 @@ from time import sleep, time
 
 from cozyutils.date_helper import epoche2date, date2epoche
 
-from symlinkedfilesystem import SymlinkedFileSystem
-
-from backup import Backup
+from plainfsbackup import PlainFSBackup
+from cozy.fileupdatestrategy import ChangeReplacesFileUpdateStrategy
 
 import shutil
 
 
-class HardlinkedFSBackup(Backup):
-
-    def __init__(self, backup_path, backup_id):
-        Backup.__init__(self, backup_path, backup_id)
-        if not os.path.exists(os.path.join(self.backup_path, str(self.backup_id))):
-            os.makedirs(os.path.join(self.backup_path, str(self.backup_id), str(int(time()))))
-
-
-    def mount(self, version):
-
-        mount_point = os.path.join(self._temp_dir(), epoche2date(version))
-
-        os.symlink(os.path.join(self.backup_path, str(self.backup_id), str(version)), mount_point)
-
-        return SymlinkedFileSystem(mount_point)
-
+class HardlinkedFSBackup(PlainFSBackup):
 
     def clone(self, version):
+
         new_version = str(int(time()))
-        shutil.copytree(os.path.join(self.backup_path, str(self.backup_id), str(version)),
-                        os.path.join(self.backup_path, str(self.backup_id), new_version),
-                        True)
+        os.makedirs(os.path.join(self.backup_path, str(self.backup_id), new_version))
+
+        for (dirpath, dirnames, filenames) in os.walk(os.path.join(self.backup_path, str(self.backup_id), str(version))):
+            for dirname in dirnames:
+                src = os.path.join(dirpath, dirname)
+                dst = src.replace(os.path.join(self.backup_path, str(self.backup_id), str(version)), os.path.join(self.backup_path, str(self.backup_id), new_version))
+                if os.path.islink(src):
+                    os.link(src, dst)
+                else:
+                    os.mkdir(dst)
+                    shutil.copystat(src, dst)
+            for filename in filenames:
+                src = os.path.join(dirpath, filename)
+                dst = src.replace(os.path.join(self.backup_path, str(self.backup_id), str(version)), os.path.join(self.backup_path, str(self.backup_id), new_version))
+                os.link(src, dst)
 
 
-    def get_latest_version(self):
-        versions = os.listdir(os.path.join(self.backup_path, str(self.backup_id)))
-        versions.sort()
-        return int(versions[-1])
-
-    def _get_base_version_of(self, current_version):
-        versions = os.listdir(os.path.join(self.backup_path, str(self.backup_id)))
-        versions.sort()
-        i = versions.index(str(current_version)) - 1
-        if i == -1:
-            return None
-        else:
-            return int(versions[i])
-
-    def _get_version_with(self, base_version):
-        versions = os.listdir(os.path.join(self.backup_path, str(self.backup_id)))
-        versions.sort()
-        i = versions.index(str(base_version)) + 1
-        if i == len(versions):
-            return None
-        else:
-            return int(versions[i])
+    def get_file_update_strategy(self, mounted_filesystem, logger):
+        return ChangeReplacesFileUpdateStrategy(mounted_filesystem.mount_point, logger)

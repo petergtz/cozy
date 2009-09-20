@@ -40,7 +40,7 @@ class Setup:
         config = cozy.configuration.Configuration()
         config.backup_enabled = True
 #        config.backup_type = 'PlainFS'
-        config.backup_type = 'CozyFS'
+        config.backup_type = 'HardlinkedFS'
         #config.set_backup_id(BACKUP_ID)
         config.backup_location_type = 'absolute_path'
         config.backup_location_identifier = BACKUP_DIR
