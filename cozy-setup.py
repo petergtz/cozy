@@ -258,7 +258,7 @@ class ConfigMediator:
         pid = subprocess.Popen(['crontab', '-l'], stdout=subprocess.PIPE)
         crontab = pid.stdout.read()
         new_crontab = re.sub('(?m)^.*cozy-backup.py -s\n', '', crontab)
-        new_crontab += '* * * * * ' + COZY_BACKUP_PATH + ' -s\n'
+        new_crontab += '*/60 * * * * ' + COZY_BACKUP_PATH + ' -s\n'
         pid = subprocess.Popen(['crontab', '-'], stdin=subprocess.PIPE)
         pid.stdin.write(new_crontab)
         pid.stdin.close()
