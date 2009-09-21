@@ -82,8 +82,6 @@ class CozyRestoreNautilusExtension(nautilus.MenuProvider):
         path = urlparse.urlsplit(urllib.unquote(uri.get_uri()))[2]
 
         try:
-            self.manager_object = session_bus.get_object('org.freedesktop.Cozy.RestoreBackend', '/org/freedesktop/Cozy/RestoreBackend')
-            self.manager = dbus.Interface(self.manager_object, dbus_interface='org.freedesktop.Cozy.RestoreBackend')
             if not self.is_in_restore_mode:
                 item = nautilus.MenuItem(name="NautilusPython::restoremode", icon='cozy', label="Enter Restore Mode", tip="Switches Nautilus into Restore Mode to discover older versions of files and folders")
                 item.connect("activate", self.go_to_restore_mode, path, window)
@@ -92,6 +90,9 @@ class CozyRestoreNautilusExtension(nautilus.MenuProvider):
                 item = nautilus.MenuItem(name="NautilusPython::closerestoremode", label="Exit Restore Mode", tip="Exits from Restore Mode and goes back to normal mode", icon='close-cozy')
                 item.connect("activate", self.close_restore_mode, path, window)
                 items.append(item)
+
+                self.manager_object = session_bus.get_object('org.freedesktop.Cozy.RestoreBackend', '/org/freedesktop/Cozy/RestoreBackend')
+                self.manager = dbus.Interface(self.manager_object, dbus_interface='org.freedesktop.Cozy.RestoreBackend')
 
                 if self.manager.get_previous_version_path(path) != '':
                     item = nautilus.MenuItem(name="NautilusPython::prev", label="Previous Version", tip="Go to previous Version of current location", icon='go-previous')
