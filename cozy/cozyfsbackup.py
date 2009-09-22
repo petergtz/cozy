@@ -71,6 +71,7 @@ class CozyFSBackup(Backup):
 #        print stdout
 
     def __del__(self):
+        Backup.__del__(self)
         if hasattr(self, 'db'): # this is necessary because destructor can be called although object not completely initialized
             self.db.close()
 

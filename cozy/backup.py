@@ -30,6 +30,10 @@ class Backup(object):
         self.backup_id = backup_id
         self.__temp_mount_dir = None
 
+    def __del__(self):
+        if os.path.exists(self.__temp_mount_dir):
+            os.rmdir(self.__temp_mount_dir)
+
     def _temp_dir(self):
         if self.__temp_mount_dir is None:
             loginname = pwd.getpwuid(os.getuid())[0]

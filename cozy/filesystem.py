@@ -42,8 +42,6 @@ class FileSystem(object):
     def _remove_mount_point_dir(self):
         if self.os.path.exists(self.mount_point):
             self.os.rmdir(self.mount_point)
-        if self.os.path.exists(dirname(self.mount_point)) and len(self.os.listdir(dirname(self.mount_point))) == 0:
-            self.os.rmdir(os.path.dirname(self.mount_point))
 
     def _is_mounted(self):
         return self.os.path.exists(self.mount_point) and self.os.path.ismount(self.mount_point)

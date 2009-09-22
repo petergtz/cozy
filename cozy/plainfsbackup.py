@@ -35,7 +35,6 @@ class PlainFSBackup(Backup):
 
 
     def mount(self, version, as_readonly):
-
         mount_point = os.path.join(self._temp_dir(), epoche2date(version))
 
         os.symlink(os.path.join(self.backup_path, str(self.backup_id), str(version)), mount_point)
