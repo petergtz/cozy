@@ -1,5 +1,8 @@
 #!/usr/bin/python
 
+import sys, os.path
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib'))
+
 import unittest
 
 import cozy.fileupdatestrategy

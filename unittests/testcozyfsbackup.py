@@ -1,7 +1,10 @@
 #!/usr/bin/python
 
 import unittest
-import os.path
+
+import sys, os.path
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib'))
+
 import cozy.cozyfsbackup
 
 from cozy.filesystem import FileSystem

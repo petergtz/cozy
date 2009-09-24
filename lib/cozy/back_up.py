@@ -76,7 +76,7 @@ def sync(source_path, target_path, file_update_strategy):
 
 
 def back_up():
-    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'debugging', 'config')
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logging', 'config')
     logging.config.fileConfig(config_path)
 
     logger = logging.getLogger('cozy.backup')

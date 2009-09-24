@@ -9,11 +9,11 @@ Usage:
 
 Whenever it's time to back up your data execute:
 
-./cozy-backup.py
+./cozy-backup
 
 
-Whenever you need your backed up data open the source folder you specified in
- ~/.cozy in Nautilus and hit the "Go To Restore Mode" button. Find the file 
+Whenever you need your backed up data open the source folder (that you specified in
+the configuration) in Nautilus and hit the "Go To Restore Mode" button. Find the file 
 you're looking for and copy it to the desired location.
 
 Important: Don't forget to close the Restore mode, otherwise the temporarily mounted cozyfs will not be unmounted.

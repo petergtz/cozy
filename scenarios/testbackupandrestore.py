@@ -6,19 +6,21 @@ import sys
 import os
 import shutil
 import subprocess
-import cozy.configuration
 import dbus
 from time import sleep
 import stat
 
-TC_DIR = os.path.abspath(os.path.dirname(__file__))
-ROOT_DIR = os.path.join(TC_DIR, '..')
+TC_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(TC_DIR)
 
+sys.path.append(os.path.join(ROOT_DIR, 'lib'))
+
+import cozy.configuration
 
 COZY_MKFS_PATH = os.path.join(ROOT_DIR, 'mkfs.cozyfs.py')
-COZY_BACKUP_PATH = os.path.join(ROOT_DIR, 'cozy-backup.py')
-COZY_RESTORE_BACKEND_PATH = os.path.join(ROOT_DIR, 'cozy-restore-backend.py')
-COZY_LOCATION_MANAGER = os.path.join(ROOT_DIR, 'cozy-location-manager.py')
+COZY_BACKUP_PATH = os.path.join(ROOT_DIR, 'cozy-backup')
+COZY_RESTORE_BACKEND_PATH = os.path.join(ROOT_DIR, 'cozy-restore-backend')
+COZY_LOCATION_MANAGER = os.path.join(ROOT_DIR, 'cozy-location-manager')
 TEST_DATA = os.path.join(TC_DIR, 'TestData')
 
 DOT_COZY = os.path.expanduser('~/.cozy')

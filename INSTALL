@@ -1,12 +1,6 @@
 Install-Instructions
 =====================
 
-from within this directory on the command line:
-
-mkdir ~/.nautilus/python-extensions
-ln -s $PWD/nautilus-restore-extension/cozy-restore-nautilus-extension.py ~/.nautilus/python-extensions/
-
-Also make sure that the cozyfs directory is in your PATH.
-PYTHONPATH
-
+Execute local-install.sh from the command line. No superuser needed.
+ 
 No further installation steps needed.

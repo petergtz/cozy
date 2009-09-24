@@ -28,14 +28,14 @@ class Backup(object):
     def __init__(self, backup_path, backup_id):
         self.backup_path = backup_path
         self.backup_id = backup_id
-        self.__temp_mount_dir = None
+        self.__temp_mount_dir = ''
 
     def __del__(self):
         if os.path.exists(self.__temp_mount_dir):
             os.rmdir(self.__temp_mount_dir)
 
     def _temp_dir(self):
-        if self.__temp_mount_dir is None:
+        if self.__temp_mount_dir == '':
             loginname = pwd.getpwuid(os.getuid())[0]
             self.__temp_mount_dir = tempfile.mkdtemp(prefix='cozy-' + loginname)
         return self.__temp_mount_dir

@@ -39,7 +39,7 @@ import dbus
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
-COZY_MKFS_PATH = os.path.join(BASE_DIR, 'cozyfs/mkfs.cozyfs.py')
+COZY_MKFS_PATH = 'mkfs.cozyfs.py'
 
 COZY_RESTORE_BACKEND_PATH = os.path.join(BASE_DIR, 'cozy-restore-backend.py')
 COZY_BACKUP_APPLET_PATH = os.path.join(BASE_DIR, 'cozy-backup-applet.py')
@@ -277,12 +277,12 @@ class ConfigMediator:
         self.configuration_window.show_all()
 
 
-if __name__ == "__main__":
-    DBusGMainLoop(set_as_default=True)
+#if __name__ == "__main__":
+DBusGMainLoop(set_as_default=True)
 
-    builder = gtk.Builder()
-    builder.add_from_file(BUILDER_XML_PATH)
+builder = gtk.Builder()
+builder.add_from_file(BUILDER_XML_PATH)
 
-    mediator = ConfigMediator()
-    mediator.show_all()
-    gtk.main()
+mediator = ConfigMediator()
+mediator.show_all()
+gtk.main()

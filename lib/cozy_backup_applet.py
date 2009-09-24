@@ -26,9 +26,8 @@ import dbus
 import gobject
 
 import subprocess
-import cozy.backup_action
 
-#import cozy.configdialog
+import cozy.back_up
 
 import sys
 import os
@@ -38,13 +37,10 @@ from cozy.locationmanager import LocationManager
 from cozy.configuration import Configuration
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-COZY_CONFIGDLG_PATH = os.path.join(BASE_DIR, 'cozy-configdialog.py')
-COZY_ICON_PATH = os.path.join(BASE_DIR, 'Icon/cozy.svg')
+COZY_CONFIGDLG_PATH = os.path.join(BASE_DIR, 'cozy_setup.py')
+COZY_ICON_PATH = os.path.join(BASE_DIR, '../pixmaps/cozy.svg')
 
 class CozyIcon(gtk.StatusIcon):
-    '''
-    classdocs
-    '''
 
     def on_activate(self):
         dlg = gtk.MessageDialog(buttons=gtk.BUTTONS_YES_NO,
@@ -52,7 +48,7 @@ class CozyIcon(gtk.StatusIcon):
         result = dlg.run()
         dlg.destroy()
         if result == gtk.RESPONSE_YES:
-            cozy.backup_action.back_up()
+            cozy.back_up.back_up()
 
     def on_popup_menu(self, button, activate_time):
         menu = gtk.Menu()
@@ -159,16 +155,16 @@ class CozyIcon(gtk.StatusIcon):
     def on_exit(self, widget):
         mainloop.quit()
 
-if __name__ == '__main__':
+#if __name__ == '__main__':
 
-    DBusGMainLoop(set_as_default=True)
+DBusGMainLoop(set_as_default=True)
 
 #    builder = gtk.Builder()
 #    builder.add_from_file("configuration_dialog.xml")
 #    cozy.configdialog.builder = builder
 
-    icon = CozyIcon()
+icon = CozyIcon()
 
-    mainloop = gobject.MainLoop()
-    mainloop.run()
+mainloop = gobject.MainLoop()
+mainloop.run()
 

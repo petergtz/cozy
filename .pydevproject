@@ -10,5 +10,6 @@
 </pydev_pathproperty>
 <pydev_pathproperty name="org.python.pydev.PROJECT_SOURCE_PATH">
 <path>/Cozy</path>
+<path>/Cozy/lib</path>
 </pydev_pathproperty>
 </pydev_project>

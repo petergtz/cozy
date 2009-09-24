@@ -2,9 +2,8 @@
 
 from __future__ import with_statement
 
-import sys
-sys.path.append('/home/peter/Projects/Cozy')
-
+import sys, os.path
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib'))
 
 import unittest
 import cozy.filesystem

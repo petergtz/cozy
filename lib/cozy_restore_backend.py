@@ -17,12 +17,6 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 import sys
-import os
-
-if os.environ.has_key('PYTHONPATH'):
-    os.environ['PYTHONPATH'] = os.environ['PYTHONPATH'] + ':' + os.path.dirname(os.path.abspath(__file__))
-else:
-    os.environ['PYTHONPATH'] = os.path.dirname(os.path.abspath(__file__))
 
 from cozy.backupprovider import BackupProvider
 from dbus.mainloop.glib import DBusGMainLoop
@@ -60,21 +54,21 @@ class ManagerDaemon(cozyutils.daemon.Daemon):
         mainloop.run()
 
 
-if __name__ == '__main__':
-    daemon = ManagerDaemon('/tmp/cozy-restore-backend.pid', stdout='/tmp/cozy-restore-backend-stdout', stderr='/tmp/cozy-restore-backend-stderr')
-    if len(sys.argv) == 2:
-        if 'start' == sys.argv[1]:
-            daemon.start()
-        elif 'stop' == sys.argv[1]:
-            daemon.stop()
-        elif 'restart' == sys.argv[1]:
-            daemon.restart()
-        elif 'nodaemon' == sys.argv[1]:
-            daemon.run()
-        else:
-            print "Unknown command"
-            sys.exit(2)
-        sys.exit(0)
+#if __name__ == '__main__':
+daemon = ManagerDaemon('/tmp/cozy-restore-backend.pid', stdout='/tmp/cozy-restore-backend-stdout', stderr='/tmp/cozy-restore-backend-stderr')
+if len(sys.argv) == 2:
+    if 'start' == sys.argv[1]:
+        daemon.start()
+    elif 'stop' == sys.argv[1]:
+        daemon.stop()
+    elif 'restart' == sys.argv[1]:
+        daemon.restart()
+    elif 'nodaemon' == sys.argv[1]:
+        daemon.run()
     else:
-        print "usage: %s start|stop|restart|nodaemon" % sys.argv[0]
+        print "Unknown command"
         sys.exit(2)
+    sys.exit(0)
+else:
+    print "usage: %s start | stop | restart | nodaemon" % sys.argv[0]
+    sys.exit(2)

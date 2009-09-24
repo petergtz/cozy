@@ -1,6 +1,10 @@
 #!/usr/bin/python
 
 import unittest
+
+import sys, os.path
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'lib'))
+
 from cozy.configuration import Configuration
 
 

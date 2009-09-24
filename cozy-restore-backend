@@ -1,0 +1,38 @@
+#!/usr/bin/python
+
+# Cozy Backup Solution
+# Copyright (C) 2009  Peter Goetz
+# 
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 as published by
+# the Free Software Foundation.
+#  
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#    
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+
+import os
+import sys
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def is_system_wide_install():
+    return not os.path.exists(os.path.join(BASE_DIR, 'lib'))
+
+if is_system_wide_install():
+    sys.path.append('/usr/lib/cozy')    
+else:
+    sys.path.append(BASE_DIR)
+    sys.path.append(os.path.join(BASE_DIR, 'lib'))
+    os.environ['PATH'] += ':' + os.path.join(BASE_DIR, 'cozyfs')
+    if os.environ.has_key('PYTHONPATH'):
+        os.environ['PYTHONPATH'] = os.environ['PYTHONPATH'] + ':' + BASE_DIR
+    else:
+        os.environ['PYTHONPATH'] = BASE_DIR
+
+import cozy_restore_backend

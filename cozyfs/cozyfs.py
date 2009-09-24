@@ -38,7 +38,7 @@ from cozyutils.md5sum import md5sum, md5sum_from_string
 import logging
 
 import time
-import xdelta3
+#import xdelta3
 
 import cProfile
 
@@ -52,6 +52,13 @@ DIFF = 4
 DIRECTORY = 5
 
 DIFF_LIMIT = 0.5
+
+import subprocess
+class xdelta3:
+    @staticmethod
+    def xd3_main_cmdline(cmdline):
+        subprocess.call(cmdline)
+
 
 
 def query2log(query):
