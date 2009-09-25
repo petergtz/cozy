@@ -38,7 +38,7 @@ from cozy.configuration import Configuration
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 COZY_CONFIGDLG_PATH = os.path.join(BASE_DIR, 'cozy_setup.py')
-COZY_ICON_PATH = os.path.join(BASE_DIR, '../pixmaps/cozy.svg')
+COZY_ICON_NAME = 'cozy'
 
 class CozyIcon(gtk.StatusIcon):
 
@@ -72,7 +72,7 @@ class CozyIcon(gtk.StatusIcon):
 
         self.connect_object("activate", CozyIcon.on_activate, self)
         self.connect_object("popup-menu", CozyIcon.on_popup_menu, self)
-        self.set_from_file(COZY_ICON_PATH)
+        self.set_from_icon_name(COZY_ICON_NAME)
 
         system_bus = dbus.SystemBus()
         session_bus = dbus.SessionBus()

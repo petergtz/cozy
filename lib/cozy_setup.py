@@ -41,9 +41,9 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 COZY_MKFS_PATH = 'mkfs.cozyfs.py'
 
-COZY_RESTORE_BACKEND_PATH = os.path.join(BASE_DIR, 'cozy-restore-backend.py')
-COZY_BACKUP_APPLET_PATH = os.path.join(BASE_DIR, 'cozy-backup-applet.py')
-COZY_BACKUP_PATH = os.path.join(BASE_DIR, 'cozy-backup.py')
+COZY_RESTORE_BACKEND_PATH = os.path.join(BASE_DIR, 'cozy_restore_backend.py')
+COZY_BACKUP_APPLET_PATH = os.path.join(BASE_DIR, 'cozy_backup_applet.py')
+COZY_BACKUP_PATH = os.path.join(BASE_DIR, 'cozy_backup.py')
 
 BUILDER_XML_PATH = os.path.join(BASE_DIR, 'configuration_dialog.xml')
 

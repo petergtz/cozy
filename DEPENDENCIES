@@ -5,8 +5,9 @@ python-fuse
 xdelta3
 python-pysqlite2
 python-nautilus
+python
 
 
 On Debian based distributions:
-apt-get install python-fuse xdelta3 python-pysqlite2
+apt-get install python-fuse xdelta3 python-pysqlite2 python
 
