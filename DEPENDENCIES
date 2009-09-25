@@ -1,4 +1,12 @@
 Dependencies
 =============
 
-apt-get install python-fuse python-xdelta3
+python-fuse
+xdelta3
+python-pysqlite2
+python-nautilus
+
+
+On Debian based distributions:
+apt-get install python-fuse xdelta3 python-pysqlite2
+
