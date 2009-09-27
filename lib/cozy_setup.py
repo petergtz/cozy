@@ -37,37 +37,39 @@ from cozy.removeablebackuplocation import RemoveableBackupLocation
 from cozy.locationmanager import LocationManager
 import dbus
 
+import xdg.BaseDirectory, xdg.DesktopEntry
+
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 COZY_MKFS_PATH = 'mkfs.cozyfs.py'
 
-COZY_RESTORE_BACKEND_PATH = os.path.join(BASE_DIR, 'cozy_restore_backend.py')
-COZY_BACKUP_APPLET_PATH = os.path.join(BASE_DIR, 'cozy_backup_applet.py')
-COZY_BACKUP_PATH = os.path.join(BASE_DIR, 'cozy_backup.py')
-
 BUILDER_XML_PATH = os.path.join(BASE_DIR, 'configuration_dialog.xml')
 
 class ConfigMediator:
-    def __init__(self, parent=None):
+    def __init__(self, program_paths=None):
 
-        self.parent = parent
+#        self.parent = parent
+        self.builder = gtk.Builder()
+        self.builder.add_from_file(BUILDER_XML_PATH)
 
-        self.configuration_window = builder.get_object('configuration_window')
-        self.enable_checkbox = builder.get_object('enable_checkbox')
-        self.global_sections = builder.get_object('global_sections')
-        self.temp_radio = builder.get_object('temp_radio')
-        self.permanent_radio = builder.get_object('permanent_radio')
-        self.source_path_label = builder.get_object('source_path_label')
-        self.absolute_path_label = builder.get_object('absolute_path_label')
-        self.volume_name_label = builder.get_object('volume_name_label')
-        self.relative_path_label = builder.get_object('relative_path_label')
-        self.permanent_group = builder.get_object('permanent_group')
-        self.temp_group = builder.get_object('temp_group')
+        self.program_paths = program_paths
 
-        self.cozyfs_radio = builder.get_object('radio_cozyfs')
-        self.plainfs_radio = builder.get_object('radio_plainfs')
+        self.configuration_window = self.builder.get_object('configuration_window')
+        self.enable_checkbox = self.builder.get_object('enable_checkbox')
+        self.global_sections = self.builder.get_object('global_sections')
+        self.temp_radio = self.builder.get_object('temp_radio')
+        self.permanent_radio = self.builder.get_object('permanent_radio')
+        self.source_path_label = self.builder.get_object('source_path_label')
+        self.absolute_path_label = self.builder.get_object('absolute_path_label')
+        self.volume_name_label = self.builder.get_object('volume_name_label')
+        self.relative_path_label = self.builder.get_object('relative_path_label')
+        self.permanent_group = self.builder.get_object('permanent_group')
+        self.temp_group = self.builder.get_object('temp_group')
 
-        builder.connect_signals(self)
+        self.cozyfs_radio = self.builder.get_object('radio_cozyfs')
+        self.plainfs_radio = self.builder.get_object('radio_plainfs')
+
+        self.builder.connect_signals(self)
 
         self.config = Configuration()
 
@@ -184,29 +186,59 @@ class ConfigMediator:
            self.destroy(widget, data)
 
     def __applet_running(self):
-        a = os.system("ps -ef | grep -v grep | grep cozy-applet.py")
+        a = os.system("ps -ef | grep -v grep | grep " +
+                            os.path.basename(self.program_paths.COZY_BACKUP_APPLET_PATH))
         if a != 0:
             return False
         return True
 
-    def __start_applet(self):
-        subprocess.Popen([COZY_BACKUP_APPLET_PATH])
+    def __start_applet_if_not_running(self):
+        if not self.__applet_running():
+            subprocess.Popen([self.program_paths.COZY_BACKUP_APPLET_PATH])
 
-    def __stop_applet(self):
-        subprocess.call(['killall', 'cozy-applet.py'])
+    def __stop_applet_if_running(self):
+        if self.__applet_running():
+            subprocess.call(['killall', os.path.basename(self.program_paths.COZY_BACKUP_APPLET_PATH)])
 
+    def __add_restore_backend_autostart(self):
+        entry = xdg.DesktopEntry.DesktopEntry(os.path.join(xdg.BaseDirectory.xdg_config_home, 'autostart', 'cozy-restore-backend.desktop'))
+        entry.set("Type", "Application")
+        entry.set("Name", "Cozy Restore Backend")
+        entry.set("Exec", self.program_paths.COZY_RESTORE_BACKEND_PATH + " start")
+        entry.set("Icon", "cozy")
+        entry.write()
+
+
+    def __add_backup_applet_autostart(self):
+        entry = xdg.DesktopEntry.DesktopEntry(os.path.join(xdg.BaseDirectory.xdg_config_home, 'autostart', 'cozy-backup-applet.desktop'))
+        entry.set("Type", "Application")
+        entry.set("Name", "Cozy Backup Applet")
+        entry.set("Exec", self.program_paths.COZY_BACKUP_APPLET_PATH)
+        entry.set("Icon", "cozy")
+        entry.write()
+
+
+    def __remove_restore_backend_autostart(self):
+        if os.path.exists(os.path.join(xdg.BaseDirectory.xdg_config_home, 'cozy-restore-backend.desktop')):
+            os.remove(os.path.join(xdg.BaseDirectory.xdg_config_home, 'cozy-restore-backend.desktop'))
+
+    def __remove_backup_applet_autostart(self):
+        if os.path.exists(os.path.join(xdg.BaseDirectory.xdg_config_home, 'cozy-backup-applet.desktop')):
+            os.remove(os.path.join(xdg.BaseDirectory.xdg_config_home, 'cozy-backup-applet.desktop'))
 
     def delete_event(self, widget, event, data=None):
         if self.config.changed():
             self.config.write()
             if not self.config.backup_enabled:
-                self.__stop_applet()
+                self.__stop_applet_if_running()
                 self.__stop_restore_backend()
                 self.__remove_crontab_entry()
+                self.__remove_backup_applet_autostart()
+                self.__remove_restore_backend_autostart()
                 return False
 
             if self.config.backup_location_identifier is None or self.config.data_path is None:
-                dialog = builder.get_object("config_not_complete_confirmation_dialog")
+                dialog = self.builder.get_object("config_not_complete_confirmation_dialog")
                 result = dialog.run()
                 dialog.hide()
 
@@ -221,28 +253,28 @@ class ConfigMediator:
             subprocess.call([COZY_MKFS_PATH, backup_location.get_path(), str(self.config.backup_id)])
             if self.permanent_radio.get_active():
                 self.__add_crontab_entry()
-                self.__stop_applet()
+                self.__stop_applet_if_running()
+                self.__remove_backup_applet_autostart()
             else:
                 self.__remove_crontab_entry()
-                if not self.__applet_running():
-                    self.__start_applet()
+                self.__start_applet_if_not_running()
+                self.__add_backup_applet_autostart()
             self.__restart_restore_backend()
+            self.__add_restore_backend_autostart()
         return False
 
     def destroy(self, widget, data=None):
         self.configuration_window.hide()
-        if self.parent is None:
-            gtk.main_quit()
+#        if self.parent is None:
+        gtk.main_quit()
 
 
     def __restart_restore_backend(self):
-        print 'Restarting cozy-manager.py'
-        os.system(COZY_RESTORE_BACKEND_PATH + ' restart')
+        os.system(self.program_paths.COZY_RESTORE_BACKEND_PATH + ' restart')
         time.sleep(2)
 
     def __stop_restore_backend(self):
-        print 'Stopping cozy-manager.py'
-        os.system(COZY_RESTORE_BACKEND_PATH + ' stop')
+        os.system(self.program_paths.COZY_RESTORE_BACKEND_PATH + ' stop')
         time.sleep(2)
 
 #        if process.poll() is not None:
@@ -254,20 +286,18 @@ class ConfigMediator:
 #                print 'Could not start cozy-manager due to unknown reasons. cozy-applet will not work properly. TODO: should be a popup-window.'
 
     def __add_crontab_entry(self):
-        'Adds a new entry to the users crontab.'
         pid = subprocess.Popen(['crontab', '-l'], stdout=subprocess.PIPE)
         crontab = pid.stdout.read()
-        new_crontab = re.sub('(?m)^.*cozy-backup.py -s\n', '', crontab)
-        new_crontab += '*/60 * * * * ' + COZY_BACKUP_PATH + ' -s\n'
+        new_crontab = re.sub('(?m)^.*cozy-backup -s\n', '', crontab)
+        new_crontab += '*/60 * * * * ' + self.program_paths.COZY_BACKUP_PATH + ' -s\n'
         pid = subprocess.Popen(['crontab', '-'], stdin=subprocess.PIPE)
         pid.stdin.write(new_crontab)
         pid.stdin.close()
 
     def __remove_crontab_entry(self):
-        'Removes an entry from the users crontab.'
         pid = subprocess.Popen(['crontab', '-l'], stdout=subprocess.PIPE)
         crontab = pid.stdout.read()
-        new_crontab = re.sub('(?m)^.*cozy-backup.py -s\n', '', crontab)
+        new_crontab = re.sub('(?m)^.*cozy-backup -s\n', '', crontab)
         pid = subprocess.Popen(['crontab', '-'], stdin=subprocess.PIPE)
         pid.stdin.write(new_crontab)
         pid.stdin.close()
@@ -276,13 +306,18 @@ class ConfigMediator:
     def show_all(self):
         self.configuration_window.show_all()
 
+def main(program_paths):
+    DBusGMainLoop(set_as_default=True)
 
-#if __name__ == "__main__":
-DBusGMainLoop(set_as_default=True)
+    mediator = ConfigMediator(program_paths)
+    mediator.show_all()
+    gtk.main()
 
-builder = gtk.Builder()
-builder.add_from_file(BUILDER_XML_PATH)
+if __name__ == "__main__":
+    class ProgramPaths(object):
+        def __init__(self):
+            self.COZY_RESTORE_BACKEND_PATH = 'cozy-restore-backend'
+            self.COZY_BACKUP_APPLET_PATH = 'cozy-backup-applet'
+            self.COZY_BACKUP_PATH = 'cozy-backup'
+    main(ProgramPaths())
 
-mediator = ConfigMediator()
-mediator.show_all()
-gtk.main()

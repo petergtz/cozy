@@ -19,13 +19,21 @@
 import os
 import sys
 
+class ProgramPaths:
+    pass
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def is_system_wide_install():
     return not os.path.exists(os.path.join(BASE_DIR, 'lib'))
 
+program_paths = ProgramPaths()
+
 if is_system_wide_install():
     sys.path.append('/usr/lib/cozy')    
+    program_paths.COZY_RESTORE_BACKEND_PATH = 'cozy-restore-backend'
+    program_paths.COZY_BACKUP_APPLET_PATH = 'cozy-backup-applet'
+    program_paths.COZY_BACKUP_PATH = 'cozy-backup'
 else:
     sys.path.append(BASE_DIR)
     sys.path.append(os.path.join(BASE_DIR, 'lib'))
@@ -34,5 +42,12 @@ else:
         os.environ['PYTHONPATH'] = os.environ['PYTHONPATH'] + ':' + BASE_DIR
     else:
         os.environ['PYTHONPATH'] = BASE_DIR
+    program_paths.COZY_RESTORE_BACKEND_PATH = os.path.join(BASE_DIR, 'cozy-restore-backend')
+    program_paths.COZY_BACKUP_APPLET_PATH = os.path.join(BASE_DIR, 'cozy-backup-applet')
+    program_paths.COZY_BACKUP_PATH = os.path.join(BASE_DIR, 'cozy-backup')
+        
+
 
 import cozy_setup
+
+cozy_setup.main(program_paths)
