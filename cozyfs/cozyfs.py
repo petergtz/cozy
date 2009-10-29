@@ -856,6 +856,7 @@ def mount():
     FS.parser.add_option(mountopt="target_dir", metavar="TARGET_DIR", default="", help="location of backup data")
     FS.parser.add_option(mountopt="backup_id", metavar="BACKUP_ID", default="", help="mount backup from daspecified backup_id")
     FS.parser.add_option(mountopt="version", metavar="BASE", default="", help="version of backup this backup is based up on")
+    FS.parser.add_option(mountopt="ro", metavar="READONLY", default="", help="version of backup this backup is based up on")
     FS.parse(values=FS)
     FS.main()
     FS.close()

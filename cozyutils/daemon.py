@@ -1,5 +1,8 @@
 import sys, os, time, atexit
-from signal import SIGTERM
+from signal import SIGTERM, SIGHUP
+
+import signal
+
 
 class Daemon:
 	"""
@@ -12,6 +15,8 @@ class Daemon:
 		self.stdout = stdout
 		self.stderr = stderr
 		self.pidfile = pidfile
+		signal.signal(SIGHUP, sys.exit)
+#		signal.signal(SIGTERM, sys.exit)
 
 	def daemonize(self):
 		"""

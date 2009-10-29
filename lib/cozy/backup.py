@@ -22,6 +22,9 @@ from cozy.fileupdatestrategy import ChangeChangesFileUpdateStrategy
 
 class Backup(object):
 
+    VERSION_PRESENT = -1
+    VERSION_NONE = 0
+
     class MountException(Exception):
         pass
 
@@ -90,12 +93,12 @@ class Backup(object):
         returns all versions this version is built up on
         '''
         versions = []
-        if current_version is None:
+        if current_version == self.VERSION_PRESENT:
             current_version = self.get_latest_version()
             versions.append(current_version)
 
         version = self._get_base_version_of(current_version)
-        while version is not None:
+        while version != self.VERSION_NONE:
             versions.append(version)
             version = self._get_base_version_of(version)
 
@@ -107,17 +110,17 @@ class Backup(object):
         returns all versions that are built up on this version
         '''
 
-        if current_version is None:
+        if current_version == self.VERSION_PRESENT:
             return []
 
         versions = []
         current_version = self._get_version_with(base_version=current_version)
 
-        while current_version is not None:
+        while current_version != self.VERSION_PRESENT:
             versions.append(current_version)
             current_version = self._get_version_with(base_version=current_version)
 
-        versions.append(None)
+        versions.append(self.VERSION_PRESENT)
         return versions
 
 #    def get_next_versions(self, current_version):

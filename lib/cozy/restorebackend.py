@@ -14,15 +14,14 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-import dbus.service
 import os.path
 
-class RestoreBackend(dbus.service.Object):
+class RestoreBackend(object):
 
+    VERSION_PRESENT = -1
+    VERSION_NONE = 0
 
-    def __init__(self, config, backup_provider, session_bus, location_manager):
-        dbus.service.Object.__init__(self, session_bus, '/org/freedesktop/Cozy/RestoreBackend')
-
+    def __init__(self, config, backup_provider, backup_location):
         self.config = config
         if not self.config.backup_enabled:
             raise Exception("Backup is not enabled in configuration")
@@ -30,124 +29,105 @@ class RestoreBackend(dbus.service.Object):
         self.filesystems = dict()
         self.backup_provider = backup_provider
 
-        self.backup_location = location_manager.get_backup_location()
-        self.backup_location.connect_to_signal('unavailable', self.__backup_location_unavailable)
-        self.backup_location.connect_to_signal('available', self.__backup_location_available)
+        self.backup_location = backup_location
+        self.backup_location.connect_to_signal('unavailable', self.__set_backup_location_unavailable)
+        self.backup_location.connect_to_signal('available', self.__set_backup_location_available)
 
 
-        self.backup = None
-        if self.backup_location.is_available():
+        if self.is_backup_location_available():
             self.backup = self.backup_provider.get_backup(self.backup_location.get_path(), self.config)
+        else:
+            self.backup = None
 
+    def __enter__(self):
+        return self
 
-    def __backup_location_available(self):
-        self.backup = self.backup_provider.get_backup(self.backup_location.get_path(), self.config.backup_id)
-
-
-    def __backup_location_unavailable(self):
+    def __exit__(self, a, b, c):
         self.__unmount_filesystems()
-        self.backup = None
-
-
-    # FIXME: this should have some kind of a reference counter
-    # when the counter is zero, unmount all cozy fs and delete all directories
-    @dbus.service.method(dbus_interface='org.freedesktop.Cozy.RestoreBackend',
-                         in_signature='', out_signature='')
-    def close_restore_mode(self):
-        self.__unmount_filesystems()
-
 
     def __del__(self):
         self.__unmount_filesystems()
 
-
     def __unmount_filesystems(self):
         self.filesystems.clear()
 
-
-    def __get_version_from(self, path):
-        if path.startswith(self.config.data_path):
-            return None
+    def get_all_versions(self):
+        if self.is_backup_location_available():
+            result = self.backup.get_all_versions()
+            result.append(self.VERSION_PRESENT)
+            return result
         else:
-            for backup_version, filesystem in self.filesystems.items():
-                if path.startswith(filesystem.mount_point):
-                    return backup_version
-        return (-1)
+            return [self.VERSION_PRESENT]
 
+    def get_previous_version(self, version):
+        assert self.is_backup_location_available(), \
+            'Backup is not connected to the system'
+        previous_versions = self.backup.get_previous_versions(version)
+        if len(previous_versions) == 0:
+            return self.VERSION_NONE
+        else:
+            return previous_versions[0]
+
+    def get_next_version(self, version):
+        assert self.is_backup_location_available(), \
+            'Backup is not connected to the system'
+
+        next_versions = self.backup.get_next_versions(version)
+        if len(next_versions) == 0 :
+            return self.VERSION_NONE
+        else:
+            return next_versions[0]
+
+    def is_backup_location_available(self):
+        return self.backup_location.is_available()
+
+    def __set_backup_location_available(self):
+        self.backup = self.backup_provider.get_backup(self.backup_location.get_path(), self.config.backup_id)
+
+    def __set_backup_location_unavailable(self):
+        self.__unmount_filesystems()
+        self.backup = None
+
+    def get_equivalent_path_for_different_version(self, path, version):
+        assert self.is_backup_location_available(), \
+            'Backup is not connected to the system'
+
+        relative_path = self.__get_relative_path_of(path)
+        if self.__is_present_version(version):
+            return self.__full_path_in_present(relative_path)
+        else:
+            filesystem = self.__get_mounted_filesystem(version)
+            return filesystem.full_path_from(relative_path)
+
+    def __is_present_version(self, version):
+        return version == self.VERSION_PRESENT
+
+    def __full_path_in_present(self, relative_path):
+        return os.path.join(self.config.data_path, relative_path)
 
     def __get_relative_path_of(self, path):
         if path.startswith(self.config.data_path):
             path = path.replace(self.config.data_path, '')
-            return path.lstrip(' / ')
+            return path.lstrip('/')
         else:
             for backup_version, filesystem in self.filesystems.items():
                 if path.startswith(filesystem.mount_point):
                     path = path.replace(filesystem.mount_point , '')
-                    return path.lstrip(' / ')
-        return (-1)
+                    return path.lstrip('/')
+        raise Exception('Error: Requested path neither specifies your data nor your data in the past')
 
+    def __get_mounted_filesystem(self, version):
+        if not self.filesystems.has_key(version):
+            filesystem = self.backup.mount(version, as_readonly=True)
+            self.filesystems[version] = filesystem
+        return self.filesystems[version]
 
-    @dbus.service.method(dbus_interface='org.freedesktop.Cozy.RestoreBackend',
-                         in_signature='s', out_signature='s')
-    def get_previous_version_path(self, path):
-        if self.backup is None:
-            return ''
-        current_version = self.__get_version_from(path)
-        if current_version == -1:
-            return ''
+    def is_path_in_backup_data(self, path):
+        if path.startswith(self.config.data_path):
+            return True
 
-        relative_path = self.__get_relative_path_of(path)
+        for backup_version, filesystem in self.filesystems.items():
+            if path.startswith(filesystem.mount_point):
+                return True
 
-        for backup_version in self.backup.get_previous_versions(current_version):
-            if self.filesystems.has_key(backup_version):
-                filesystem = self.filesystems[backup_version]
-            else:
-                filesystem = self.backup.mount(backup_version, as_readonly=True)
-                self.filesystems[backup_version] = filesystem
-            if filesystem.has_relative_path(relative_path):
-                return filesystem.full_path_from(relative_path)
-
-        return ''
-
-    @dbus.service.method(dbus_interface='org.freedesktop.Cozy.RestoreBackend',
-                         in_signature='s', out_signature='s')
-    def get_next_version_path(self, path):
-        if self.backup is None:
-            return ''
-        current_version = self.__get_version_from(path)
-        if current_version == -1:
-            return ''
-
-        relative_path = self.__get_relative_path_of(path)
-
-        for backup_version in self.backup.get_next_versions(current_version):
-            if backup_version is None:
-                return os.path.join(self.config.data_path, relative_path)
-            if self.filesystems.has_key(backup_version):
-                filesystem = self.filesystems[backup_version]
-            else:
-                filesystem = self.backup.mount(backup_version, as_readonly=True)
-                self.filesystems[backup_version] = filesystem
-            if filesystem.has_relative_path(relative_path):
-                return filesystem.full_path_from(relative_path)
-
-        return ''
-
-    @dbus.service.method(dbus_interface='org.freedesktop.Cozy.RestoreBackend',
-                         in_signature='s', out_signature='s')
-    def get_newest_version_path(self, path):
-        relative_path = self.__get_relative_path_of(path)
-        if relative_path == -1: # if we're completely out of the backup data just stay where we are.
-            return path
-        newest_path = os.path.join(self.config.data_path, relative_path)
-        return newest_path
-
-
-    @dbus.service.method(dbus_interface='org.freedesktop.Cozy.RestoreBackend',
-                         in_signature='', out_signature='b')
-    def backup_location_available(self):
-        return self.backup_location.is_available()
-
-
-
-
+        return False
