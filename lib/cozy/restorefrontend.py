@@ -30,10 +30,26 @@ class RestoreFrontend(object):
         self.builder = gtk.Builder()
         self.builder.add_from_file(BUILDER_XML_PATH)
         self.main_window = self.builder.get_object('main_window')
+        self.__do_stupid_fancy_window_arrangements()
         self.builder.connect_signals(self)
         self.current_point_in_time_label = self.builder.get_object('current_point_in_time')
         self.dates_listbox = self.builder.get_object('dates')
 
+        self.__set_up_dates_listbox()
+
+        self.__update_dates_combobox()
+
+        self.mainloop = mainloop
+        self.main_window.show_all()
+
+    def __do_stupid_fancy_window_arrangements(self):
+        screen = self.main_window.get_screen()
+        self.main_window.move(0, screen.get_height() - 40)
+        self.main_window.resize(screen.get_width(), 40)
+        self.main_window.modify_bg(gtk.STATE_NORMAL, gtk.gdk.Color(60000, 40000, 15000))
+        self.main_window.set_keep_above(True)
+
+    def __set_up_dates_listbox(self):
         liststore = gtk.ListStore(str)
         self.dates_listbox.set_model(liststore)
         cell = gtk.CellRendererText()
@@ -42,35 +58,46 @@ class RestoreFrontend(object):
 
         self.version2formatted = dict()
         self.formatted2version = dict()
-        for version in restore_control_center.get_all_versions():
+        self.version2index = dict()
+        self.index2version = dict()
+        index = 0
+        for version in self.restore_control_center.get_all_versions():
             if version == -1:
-                self.formatted2version["Now"] = -1
-                self.version2formatted[-1] = 'Now'
+                self.index2version[index] = -1
+                self.version2index[-1] = index
+                index += 1
+#                self.formatted2version["Now"] = -1
+#                self.version2formatted[-1] = 'Now'
                 self.dates_listbox.append_text('Now')
             else:
                 datetime = epoche2date(version)
                 date, time = datetime.split('_')
                 formatted = date + '  ' + time.replace('-', ':')
-                self.formatted2version[formatted] = version
-                self.version2formatted[version] = formatted
+
+                self.index2version[index] = version
+                self.version2index[version] = index
+                index += 1
+
+#                self.formatted2version[formatted] = version
+#                self.version2formatted[version] = formatted
                 self.dates_listbox.append_text(formatted)
 
-        self.__update_point_in_time_label()
 
-        self.mainloop = mainloop
-        self.main_window.show_all()
-
-    def __update_point_in_time_label(self):
-        self.current_point_in_time_label.set_text(self.version2formatted[self.restore_control_center.current_version])
-
+    def __update_dates_combobox(self):
+        self.dates_listbox.set_active(self.version2index[self.restore_control_center.current_version])
 
     def on_previous_button_clicked(self, widget, data=None):
         self.restore_control_center.go_to_previous_version()
-        self.__update_point_in_time_label()
+        self.__update_dates_combobox()
 
     def on_next_button_clicked(self, widget, data=None):
         self.restore_control_center.go_to_next_version()
-        self.__update_point_in_time_label()
+        self.__update_dates_combobox()
+
+    def on_dates_changed(self, combobox):
+        version_text = self.dates_listbox.get_active()
+        self.restore_control_center.go_to_version(self.index2version[version_text])
+        self.__update_dates_combobox()
 
     def on_main_window_destroy(self, widget):
         self.mainloop.quit()
