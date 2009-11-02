@@ -78,9 +78,11 @@ def main():
         wait_until_event_loop_is_running_thread = WaitUntilEventLoopIsRunningThread(mainloop, restore_control_center, standard_fallback_restore_client_loader)
         wait_until_event_loop_is_running_thread.start()
 
-        restore_frontend = RestoreFrontend(restore_control_center, mainloop)
+        restore_frontend = RestoreFrontend(restore_control_center, mainloop.quit)
 
         mainloop.run()
+
+        restore_control_center.go_to_present()
 
 
 

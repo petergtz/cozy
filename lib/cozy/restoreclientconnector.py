@@ -25,10 +25,11 @@ class RestoreClientConnector(dbus.service.Object):
     def __init__(self, session_bus, standard_fallback_restore_client_loader):
         dbus.service.Object.__init__(self, session_bus, '/org/freedesktop/Cozy/RestoreControlCenter')
         self.standard_fallback_restore_client_loader = standard_fallback_restore_client_loader
-        self.restore_client = None
         self.session_bus = session_bus
+        self.restore_client = None
 
     def get_restore_client(self):
+        self.restore_client = None
         self.enter_restore_mode_event()
         time.sleep(1)
         if not self.__has_restore_client():
@@ -41,6 +42,7 @@ class RestoreClientConnector(dbus.service.Object):
     @dbus.service.signal(dbus_interface='org.freedesktop.Cozy.RestoreControlCenter',
                          signature='')
     def enter_restore_mode_event(self):
+        print 'enter_restore_mode_event'
         pass
 
     @dbus.service.method(dbus_interface='org.freedesktop.Cozy.RestoreControlCenter',
@@ -51,6 +53,7 @@ class RestoreClientConnector(dbus.service.Object):
                     restore_client_go_to_path_method_name,
                     restore_client_get_path_method_name,
                     restore_client_bus_name=None):
+        print 'register_me'
         restore_client_object = self.session_bus.get_object(restore_client_bus_name,
                                                        restore_client_object_path)
         restore_client = dbus.Interface(restore_client_object, dbus_interface=restore_client_interface_name)

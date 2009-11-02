@@ -15,9 +15,9 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 import os
-from time import sleep
 import subprocess
 import sqlite3
+import time
 
 from filesystem import FileSystem
 
@@ -25,18 +25,23 @@ from backup import Backup
 
 from cozyutils.date_helper import epoche2date, date2epoche
 
+
 DBFILE = 'fsdb'
 
-#PACKAGE_DIR = os.path.dirname(__file__)
-#BASE_DIR = os.path.dirname(PACKAGE_DIR)
-#COZY_MKFS_PATH = os.path.join(BASE_DIR, 'cozyfs/mkfs.cozyfs.py')
-#COZYFS_PATH = os.path.join(BASE_DIR, 'cozyfs/cozyfs.py')
-#COZYFSSNAPHOT_PATH = os.path.join(BASE_DIR, 'cozyfs/cozyfssnapshot.py')
 COZY_MKFS_PATH = 'mkfs.cozyfs.py'
 COZYFS_PATH = 'cozyfs.py'
 COZYFSSNAPHOT_PATH = 'cozyfssnapshot.py'
 
+SUCCESSFUL_MOUNT_TIMEOUT = 2
+
 class CozyFSBackup(Backup):
+
+    def __init__(self, backup_path, backup_id,
+                 subprocess_factory=subprocess, db_connection_factory=sqlite3):
+        Backup.__init__(self, backup_path, backup_id)
+        self.subprocess_factory = subprocess_factory
+        self.db_connection_factory = db_connection_factory
+        self.__make_cozy_fs()
 
     def __make_cozy_fs(self):
         cmdline = [COZY_MKFS_PATH, self.backup_path, str(self.backup_id)]
@@ -44,57 +49,23 @@ class CozyFSBackup(Backup):
         if rc != 0:
             raise Exception('Call to mkfs.cozy.py failed.')
 
-    def __connect_to_db(self, db_connection_factory):
-        self.db = db_connection_factory.connect(os.path.join(self.backup_path, DBFILE))
-        self.db.row_factory = db_connection_factory.Row
-        self.db.text_factory = str
+    def get_all_versions(self):
+        return self.get_previous_versions(self.VERSION_PRESENT)
 
-
-    def __init__(self, backup_path, backup_id,
-                 subprocess_factory=subprocess, db_connection_factory=sqlite3):
-        Backup.__init__(self, backup_path, backup_id)
-        self.subprocess_factory = subprocess_factory
-
-        self.__make_cozy_fs()
-        self.__connect_to_db(db_connection_factory)
-
-
-#        print '### MAKING FS: ' + ' '.join(cmdline)
-#        try:
-#            process = subprocess.Popen(cmdline, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-#        except Exception, e:
-#            print e
-#            raise
-#
-#        (stdout, stderr) = process.communicate()
-#
-#        print stdout
-
-    def __del__(self):
-        Backup.__del__(self)
-        if hasattr(self, 'db'): # this is necessary because destructor can be called although object not completely initialized
-            self.db.close()
+    def mount(self, version, as_readonly=False):
+        mount_point = os.path.join(self._temp_dir(), epoche2date(version))
+        self.__make_mount_point_dir(mount_point)
+        self.__mount_cozyfs(mount_point, version, as_readonly)
+        return FileSystem(mount_point)
 
     def __make_mount_point_dir(self, mount_point):
         if not os.path.exists(mount_point):
             os.makedirs(mount_point)
 
-    def __is_process_running(self, process):
-        if process.poll() is None:
-            return True
-        else:
-            return False
-
-    def __handle_return_code_of(self, process):
-        if  process.returncode == 3:
-            raise Backup.MountException('Error: Mount failed because database couldn''t be found.')
-        elif  process.returncode == 4:
-            raise Backup.MountException('Error: Mount failed because filesystem is locked.')
-        else:
-            (stdoutdata, stderrdata) = process.communicate()
-            #raise Backup.MountException('Error: Mount cmd : ' + ' '.join(process.args) + 'failed due to errors: ' + str(stderrdata))
-#            print 'Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: '
-            raise Backup.MountException('Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: ' + stderrdata + stdoutdata)
+    def __mount_cozyfs(self, mount_point, version, as_readonly):
+        cmdline = self.__build_cmdline(mount_point, version, as_readonly)
+        process = self.subprocess_factory.Popen(cmdline, stderr=self.subprocess_factory.PIPE, stdout=self.subprocess_factory.PIPE)
+        self.__wait_until_filesystem_is_mounted(process, mount_point)
 
     def __build_cmdline(self, mount_point, version, as_readonly):
         cmdline = [COZYFS_PATH, mount_point, '-o', 'target_dir=' + self.backup_path + ',backup_id=' + str(self.backup_id), '-f']
@@ -103,19 +74,27 @@ class CozyFSBackup(Backup):
             cmdline[-2] = cmdline[-2] + ',ro'
         return cmdline
 
-    def __mount_cozyfs(self, mount_point, version, as_readonly):
-        cmdline = self.__build_cmdline(mount_point, version, as_readonly)
-        process = self.subprocess_factory.Popen(cmdline, stderr=self.subprocess_factory.PIPE, stdout=self.subprocess_factory.PIPE)
-        sleep(2)
-        if not self.__is_process_running(process):
-            process.args = cmdline
-            self.__handle_return_code_of(process)
+    def __wait_until_filesystem_is_mounted(self, process, mount_point):
+        start_time = time.time()
+        time_passed = 0
 
-    def mount(self, version, as_readonly=False):
-        mount_point = os.path.join(self._temp_dir(), epoche2date(version))
-        self.__make_mount_point_dir(mount_point)
-        self.__mount_cozyfs(mount_point, version, as_readonly)
-        return FileSystem(mount_point)
+        while (time_passed < SUCCESSFUL_MOUNT_TIMEOUT):
+            mtab_file = open('/etc/mtab', 'r')
+            mtab_string = mtab_file.read()
+            mtab_file.close()
+            if mtab_string.find(mount_point) != -1:
+                return
+            time_passed = time.time() - start_time
+        self.__handle_return_code_of(process)
+
+    def __handle_return_code_of(self, process):
+        if  process.returncode == 3:
+            raise Backup.MountException('Error: Mount failed because database couldn''t be found.')
+        elif  process.returncode == 4:
+            raise Backup.MountException('Error: Mount failed because filesystem is locked.')
+        else:
+            (stdoutdata, stderrdata) = process.communicate()
+            raise Backup.MountException('Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: ' + stderrdata + stdoutdata)
 
 
     def clone(self, version):
@@ -124,23 +103,32 @@ class CozyFSBackup(Backup):
 
 
     def get_latest_version(self):
-        latest_version = self.db.execute("select max(version) from Versions where backup_id=?", (self.backup_id,)).fetchone()[0]
+        db = self.__connect_to_db()
+        latest_version = db.execute("select max(version) from Versions where backup_id=?", (self.backup_id,)).fetchone()[0]
+        db.close()
         return latest_version
 
     def _get_base_version_of(self, current_version):
-        row = self.db.execute("select based_on_version from Versions where backup_id=? and version=?", (self.backup_id, current_version)).fetchone()
+        db = self.__connect_to_db()
+        row = db.execute("select based_on_version from Versions where backup_id=? and version=?", (self.backup_id, current_version)).fetchone()
         base_version = row[0]
+        db.close()
         if base_version is None:
             return self.VERSION_NONE
         return base_version
 
     def _get_version_with(self, base_version):
-        row = self.db.execute("select version from Versions where backup_id=? and based_on_version=?", (self.backup_id, base_version)).fetchone()
+        db = self.__connect_to_db()
+        row = db.execute("select version from Versions where backup_id=? and based_on_version=?", (self.backup_id, base_version)).fetchone()
+        db.close()
         if row is None:
             return self.VERSION_PRESENT
         return row[0]
 
-    def get_all_versions(self):
-        return self.get_previous_versions(self.VERSION_PRESENT)
+    def __connect_to_db(self):
+        db = self.db_connection_factory.connect(os.path.join(self.backup_path, DBFILE))
+        db.row_factory = self.db_connection_factory.Row
+        db.text_factory = str
+        return db
 
 

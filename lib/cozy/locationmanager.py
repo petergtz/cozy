@@ -16,19 +16,32 @@
 
 from cozy.pathbasedbackuplocation import PathBasedBackupLocation
 from cozy.removeablebackuplocation import RemoveableBackupLocation
+from cozy.backuplocation import BackupLocation
+
+class NoneBackupLocation(BackupLocation):
+    def get_path(self):
+        assert False, 'A NoneBackupLocation has no path. Logical Error!'
+
+    def is_available(self):
+        return False
+
+    def serialize(self):
+        return 'None'
 
 
 class LocationManager(object):
 
-    def __init__(self, config, system_bus):
-# TODO: check for None:
+    def __init__(self, system_bus):
+        self.system_bus = system_bus
+
+    def get_backup_location(self, config):
         if config.backup_location_type == 'absolute_path':
-            self.backup_location = PathBasedBackupLocation(config.backup_location_identifier)
+            return PathBasedBackupLocation(config.backup_location_identifier)
         elif config.backup_location_type == 'removeable_volume':
             uuid, rel_path = config.backup_location_identifier.split(':')
-            self.backup_location = RemoveableBackupLocation(system_bus, uuid, rel_path)
+            return RemoveableBackupLocation(self.system_bus, uuid, rel_path)
+        elif config.backup_location_type is None:
+            return NoneBackupLocation()
         else:
             raise Exception('Unknown location type.')
 
-    def get_backup_location(self):
-        return self.backup_location

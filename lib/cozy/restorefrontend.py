@@ -17,6 +17,7 @@
 import pygtk
 pygtk.require('2.0')
 import gtk
+import gobject
 
 from cozyutils.date_helper import epoche2date
 
@@ -25,7 +26,7 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 BUILDER_XML_PATH = os.path.join(BASE_DIR, 'restore_window.xml')
 
 class RestoreFrontend(object):
-    def __init__(self, restore_control_center, mainloop):
+    def __init__(self, restore_control_center, close_func):
         self.restore_control_center = restore_control_center
         self.builder = gtk.Builder()
         self.builder.add_from_file(BUILDER_XML_PATH)
@@ -39,7 +40,8 @@ class RestoreFrontend(object):
 
         self.__update_dates_combobox()
 
-        self.mainloop = mainloop
+        self.close_func = close_func
+
         self.main_window.show_all()
 
     def __do_stupid_fancy_window_arrangements(self):
@@ -56,31 +58,22 @@ class RestoreFrontend(object):
         self.dates_listbox.pack_start(cell, True)
         self.dates_listbox.add_attribute(cell, 'text', 0)
 
-        self.version2formatted = dict()
-        self.formatted2version = dict()
         self.version2index = dict()
         self.index2version = dict()
         index = 0
         for version in self.restore_control_center.get_all_versions():
             if version == -1:
-                self.index2version[index] = -1
-                self.version2index[-1] = index
-                index += 1
-#                self.formatted2version["Now"] = -1
-#                self.version2formatted[-1] = 'Now'
-                self.dates_listbox.append_text('Now')
+                formatted = 'Now'
             else:
                 datetime = epoche2date(version)
                 date, time = datetime.split('_')
                 formatted = date + '  ' + time.replace('-', ':')
 
-                self.index2version[index] = version
-                self.version2index[version] = index
-                index += 1
+            self.index2version[index] = version
+            self.version2index[version] = index
+            index += 1
 
-#                self.formatted2version[formatted] = version
-#                self.version2formatted[version] = formatted
-                self.dates_listbox.append_text(formatted)
+            self.dates_listbox.append_text(formatted)
 
 
     def __update_dates_combobox(self):
@@ -100,5 +93,7 @@ class RestoreFrontend(object):
         self.__update_dates_combobox()
 
     def on_main_window_destroy(self, widget):
-        self.mainloop.quit()
+        self.main_window.hide_all()
+#        self.main_window.destroy()
+        self.close_func()
 

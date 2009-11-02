@@ -16,6 +16,7 @@
 
 import dbus
 import dbus.service
+import sys
 
 class RestoreControlCenter(object):
 
@@ -25,7 +26,22 @@ class RestoreControlCenter(object):
         self.__current_version = restore_backend.VERSION_PRESENT
 
     def __del__(self):
-        self.go_to_version(-1)
+        self.go_to_present()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, a, b, c):
+        self.go_to_present()
+
+    def go_to_present(self):
+        try:
+            self.go_to_version(self.restore_backend.VERSION_PRESENT)
+        except Exception, e:
+            print >> sys.stderr, e
+        self.restore_backend.unmount_filesystems()
+
+
 
     def set_restore_client(self, restore_client):
         self.restore_client = restore_client

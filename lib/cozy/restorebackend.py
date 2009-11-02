@@ -15,6 +15,24 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 import os.path
+import threading
+
+#class BackgroundPreMounter(threading.Thread):
+#    def __init__(self, restore_backend, version):
+#        threading.Thread.__init__(self)
+#        self.restore_backend = restore_backend
+#        self.version = version
+#
+#    def __mount(self, version):
+#        if version != self.restore_backend.VERSION_PRESENT and version != self.restore_backend.VERSION_NONE:
+#            self.restore_backend._get_mounted_filesystem(version)
+#
+#    def run(self):
+#        previous_version = self.restore_backend.get_previous_version(self.version)
+#        self.__mount(previous_version)
+#        next_version = self.restore_backend.get_next_version(self.version)
+#        self.__mount(next_version)
+
 
 class RestoreBackend(object):
 
@@ -23,12 +41,18 @@ class RestoreBackend(object):
 
     def __init__(self, config, backup_provider, backup_location):
         self.config = config
-        if not self.config.backup_enabled:
-            raise Exception("Backup is not enabled in configuration")
+#        if not self.config.backup_enabled:
+#            raise Exception("Backup is not enabled in configuration")
 
         self.filesystems = dict()
         self.backup_provider = backup_provider
 
+        self.signal_handlers = dict()
+
+        self.set_backup_location(backup_location)
+#        self.lock = threading.Lock()
+
+    def set_backup_location(self, backup_location):
         self.backup_location = backup_location
         self.backup_location.connect_to_signal('unavailable', self.__set_backup_location_unavailable)
         self.backup_location.connect_to_signal('available', self.__set_backup_location_available)
@@ -43,18 +67,18 @@ class RestoreBackend(object):
         return self
 
     def __exit__(self, a, b, c):
-        self.__unmount_filesystems()
+        self.unmount_filesystems()
 
     def __del__(self):
-        self.__unmount_filesystems()
+        self.unmount_filesystems()
 
-    def __unmount_filesystems(self):
+    def unmount_filesystems(self):
         self.filesystems.clear()
 
     def get_all_versions(self):
         if self.is_backup_location_available():
             result = self.backup.get_all_versions()
-            result.append(self.VERSION_PRESENT)
+            result.insert(0, self.VERSION_PRESENT)
             return result
         else:
             return [self.VERSION_PRESENT]
@@ -82,11 +106,24 @@ class RestoreBackend(object):
         return self.backup_location.is_available()
 
     def __set_backup_location_available(self):
-        self.backup = self.backup_provider.get_backup(self.backup_location.get_path(), self.config.backup_id)
+        self.backup = self.backup_provider.get_backup(self.backup_location.get_path(), self.config)
+        self._emit_signal('available')
 
     def __set_backup_location_unavailable(self):
-        self.__unmount_filesystems()
+        self.unmount_filesystems()
         self.backup = None
+        self._emit_signal('unavailable')
+
+    def connect_to_signal(self, signal_name, handler_function):
+        if not self.signal_handlers.has_key(signal_name):
+            self.signal_handlers[signal_name] = []
+        self.signal_handlers[signal_name].append(handler_function)
+
+    def _emit_signal(self, signal):
+        if self.signal_handlers.has_key(signal):
+            for handler_func in self.signal_handlers[signal]:
+                handler_func()
+
 
     def get_equivalent_path_for_different_version(self, path, version):
         assert self.is_backup_location_available(), \
@@ -96,7 +133,9 @@ class RestoreBackend(object):
         if self.__is_present_version(version):
             return self.__full_path_in_present(relative_path)
         else:
-            filesystem = self.__get_mounted_filesystem(version)
+            filesystem = self._get_mounted_filesystem(version)
+#            background_premounter = BackgroundPreMounter(self, version)
+#            background_premounter.start()
             return filesystem.full_path_from(relative_path)
 
     def __is_present_version(self, version):
@@ -116,18 +155,11 @@ class RestoreBackend(object):
                     return path.lstrip('/')
         raise Exception('Error: Requested path neither specifies your data nor your data in the past')
 
-    def __get_mounted_filesystem(self, version):
+    def _get_mounted_filesystem(self, version):
+#        self.lock.acquire()
         if not self.filesystems.has_key(version):
             filesystem = self.backup.mount(version, as_readonly=True)
             self.filesystems[version] = filesystem
+        #self.lock.release()
         return self.filesystems[version]
 
-    def is_path_in_backup_data(self, path):
-        if path.startswith(self.config.data_path):
-            return True
-
-        for backup_version, filesystem in self.filesystems.items():
-            if path.startswith(filesystem.mount_point):
-                return True
-
-        return False

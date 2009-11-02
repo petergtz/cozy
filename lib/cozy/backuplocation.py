@@ -24,12 +24,6 @@ class BackupLocation(object):
     def is_available(self):
         pass
 
-    def available(self):
-        pass
-
-    def unavailable(self):
-        pass
-
     def connect_to_signal(self, signal_name, handler_function):
         pass
 
