@@ -74,20 +74,6 @@ class Backup(object):
     def _get_version_with(self, base_version):
         raise NotImplementedError()
 
-#    def get_previous_versions(self, current_version):
-#        '''
-#        returns all versions this version is built up on
-#        '''
-#        if current_version is None:
-#            current_version = self.get_latest_version()
-#
-#        version = self._get_base_version_of(current_version)
-#        versions = []
-#        while version != None:
-#            versions.append(version)
-#            version = self._get_base_version_of(version)
-#        return versions
-
     def get_previous_versions(self, current_version):
         '''
         returns all versions this version is built up on
@@ -122,31 +108,6 @@ class Backup(object):
 
         versions.append(self.VERSION_PRESENT)
         return versions
-
-#    def get_next_versions(self, current_version):
-#        '''
-#        returns all versions that are built up on this version
-#        '''
-#        versions = []
-#
-#        if current_version is None:
-#            return versions
-#
-#        version = self._get_version_with(base_version=current_version)
-#        if version is None:
-#            versions.append(None)
-#            return versions
-#
-#        while version != None:
-#            versions.append(version)
-#            version = self._get_version_with(base_version=version)
-#            if version is None:
-#                versions.append(None)
-#                if len(versions) >= 2:
-#                    del versions[-2]
-#                return versions
-#
-#        return versions
 
     def get_all_versions(self):
         '''

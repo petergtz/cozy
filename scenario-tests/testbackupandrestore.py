@@ -42,8 +42,8 @@ class Setup:
 
         config = cozy.configuration.Configuration()
         config.backup_enabled = True
-#        config.backup_type = 'PlainFS'
-        config.backup_type = 'CozyFS'
+        config.backup_type = 'PlainFS'
+#        config.backup_type = 'CozyFS'
         #config.set_backup_id(BACKUP_ID)
         config.backup_location_type = 'absolute_path'
         config.backup_location_identifier = BACKUP_DIR
@@ -54,19 +54,6 @@ class Setup:
 
     def make_cozyfs(self):
         os.mkdir(BACKUP_DIR)
-
-#        cmdline = [COZY_MKFS_PATH, BACKUP_DIR, str(self.backup_id)]
-#        print '### MAKING FS: ' + ' '.join(cmdline)
-#        try:
-#            process = subprocess.Popen(cmdline, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-#        except Exception, e:
-#            print e
-#            raise
-#
-#        (stdout, stderr) = process.communicate()
-#
-#        print stdout
-#        return stdout
 
     def __exit__(self, type, value, traceback):
         if os.path.exists(DOT_COZY_BACKUP):
