@@ -50,7 +50,7 @@ class Backup(object):
         raise NotImplementedError()
 
 
-    def mount_latest(self, as_readonly=False):
+    def mount_latest_version(self, as_readonly=False):
         '''
         mounts a filesystem and returns Backup object that holds its mount point 
         '''
@@ -62,7 +62,7 @@ class Backup(object):
         '''
         raise NotImplementedError()
 
-    def clone_latest(self):
+    def clone_latest_version(self):
         '''
         takes a snapshot of the specified filesystem and returns the new version
         '''
