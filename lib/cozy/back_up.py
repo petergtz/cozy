@@ -89,9 +89,9 @@ def back_up():
 
         system_bus = dbus.SystemBus()
 
-        location_manager = LocationManager(config, system_bus)
+        location_manager = LocationManager(system_bus)
 
-        backup_location = location_manager.get_backup_location()
+        backup_location = location_manager.get_backup_location(config)
 
         backup = backup_provider.get_backup(backup_location.get_path(), config)
         logger.info('Version Number: %d', backup.get_latest_version())

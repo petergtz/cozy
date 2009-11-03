@@ -16,11 +16,12 @@ ROOT_DIR = os.path.dirname(TC_DIR)
 sys.path.append(os.path.join(ROOT_DIR, 'lib'))
 
 import cozy.configuration
+import cozy.restorebackend
+import cozy.backupprovider
+import cozy.locationmanager
 
 COZY_MKFS_PATH = os.path.join(ROOT_DIR, 'mkfs.cozyfs.py')
 COZY_BACKUP_PATH = os.path.join(ROOT_DIR, 'cozy-backup')
-COZY_RESTORE_BACKEND_PATH = os.path.join(ROOT_DIR, 'cozy-restore-backend')
-COZY_LOCATION_MANAGER = os.path.join(ROOT_DIR, 'cozy-location-manager')
 TEST_DATA = os.path.join(TC_DIR, 'TestData')
 
 DOT_COZY = os.path.expanduser('~/.cozy')
@@ -225,32 +226,11 @@ class DataHandler:
 class CozyBackup:
 
     def __enter__(self):
-#        subprocess.call([COZY_LOCATION_MANAGER, 'start'])
-#        sleep(1)
-#        if not self.__manager_running(COZY_LOCATION_MANAGER):
-#            msg = open('/tmp/cozy-location-manager-stderr').read()
-#            os.remove('/tmp/cozy-location-manager-stderr')
-#            raise Exception(msg)
-
-        subprocess.call([COZY_RESTORE_BACKEND_PATH, 'start'])
-        sleep(1)
-        if not self.__manager_running(COZY_RESTORE_BACKEND_PATH):
-            msg = open('/tmp/cozy-restore-backend-stderr').read()
-            os.remove('/tmp/cozy-restore-backend-stderr')
-            raise Exception(msg)
-
-
-        self.session_bus = dbus.SessionBus()
-        self.manager_object = self.session_bus.get_object('org.freedesktop.Cozy.RestoreBackend', '/org/freedesktop/Cozy/RestoreBackend')
-        self.manager = dbus.Interface(self.manager_object, dbus_interface='org.freedesktop.Cozy.RestoreBackend')
-
+        config = cozy.configuration.Configuration()
+        backup_provider = cozy.backupprovider.BackupProvider()
+        backup_location = cozy.locationmanager.LocationManager(None).get_backup_location(config)
+        self.restore_backend = cozy.restorebackend.RestoreBackend(config, backup_provider, backup_location)
         return self
-
-    def __manager_running(self, daemon):
-        a = os.system("ps -ef | grep -v grep | grep " + daemon)
-        if a != 0:
-            return False
-        return True
 
     def backup_data(self):
         cmdline = [COZY_BACKUP_PATH, '-s']
@@ -261,30 +241,33 @@ class CozyBackup:
         else:
             print '### PASSED backup_data'
 
-    def get_prev_version_path(self, path):
+    def get_prev_version(self, version):
         try:
-            prev_version_path = self.manager.get_previous_version_path(path)
-            print '### PASSED get_pre_version_path'
-            return prev_version_path
+            prev_version = self.restore_backend.get_previous_version(version)
+            print '### PASSED get_prev_version'
+            return prev_version
         except Exception, e:
-            sys.exit('### FAILED get_pre_version_path: ' + str(e))
+            sys.exit('### FAILED get_prev_version: ' + str(e))
 
-    def get_next_version_path(self, path):
+    def get_next_version(self, version):
         try:
-            next_version_path = self.manager.get_next_version_path(path)
-            print '### PASSED get_next_version_path'
-            return next_version_path
+            next_version = self.restore_backend.get_next_version(version)
+            print '### PASSED get_next_version'
+            return next_version
         except Exception, e:
-            sys.exit('### FAILED get_next_version_path: ' + str(e))
+            sys.exit('### FAILED get_next_version: ' + str(e))
 
+    def get_equivalent_path(self, path, version):
+        try:
+            equiv_path = self.restore_backend.get_equivalent_path_for_different_version(path, version)
+            print '### PASSED get_equivalent_path'
+            return equiv_path
+        except Exception, e:
+            sys.exit('### FAILED get_equivalent_path: ' + str(e))
 
-    def close_restore_mode(self):
-        self.manager.close_restore_mode()
 
     def __exit__(self, type, value, traceback):
-        self.close_restore_mode()
-        subprocess.call([COZY_RESTORE_BACKEND_PATH, 'stop'])
-#        subprocess.call([COZY_LOCATION_MANAGER, 'stop'])
+        del self.restore_backend
 
 
 with Setup():
@@ -298,17 +281,19 @@ with Setup():
                 cozy_backup.backup_data()
                 data_handler.change_data()
 
-            prev_version_path = DATA
+            current_path = DATA
+            current_version = cozy_backup.restore_backend.VERSION_PRESENT
             for change_number in range(len(data_handler.changes)):
                 data_handler.undo_change_data()
-                prev_version_path = cozy_backup.get_prev_version_path(prev_version_path)
-                data_handler.compare_data_with(prev_version_path)
+                current_version = cozy_backup.get_prev_version(current_version)
+                current_path = cozy_backup.get_equivalent_path(current_path, current_version)
+                data_handler.compare_data_with(current_path)
 
-            next_version_path = prev_version_path
             for change_number in range(len(data_handler.changes)):
                 data_handler.redo_change_data()
-                next_version_path = cozy_backup.get_next_version_path(next_version_path)
-                data_handler.compare_data_with(next_version_path)
+                current_version = cozy_backup.get_next_version(current_version)
+                current_path = cozy_backup.get_equivalent_path(current_path, current_version)
+                data_handler.compare_data_with(current_path)
 
 
 print '### EXITING SUCCESSFULLY'
