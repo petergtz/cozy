@@ -1,5 +1,5 @@
 Install-Instructions for Local Install
-=====================
+=======================================
 
 Execute local-install.sh from the command line. No superuser needed.
 This will install the cozy icons.
