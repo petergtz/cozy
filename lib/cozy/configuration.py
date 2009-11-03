@@ -27,27 +27,38 @@ from  cozyutils.md5sum import md5sum_from_string
 class Configuration(object):
 
     def __init__(self, filename=None):
+        self.filename = filename
+        self.__init()
+
+    def write(self):
+        with open(os.path.expanduser('~/.cozy'), 'w') as fp:
+            self.parser.write(fp)
+            self.__set_unchanged()
+
+    def forget_changes(self):
+        self.__init()
+
+    def __init(self):
         self.parser = ConfigParser.SafeConfigParser()
-        if filename is None:
+        if self.filename is None:
             result = self.parser.read(os.path.expanduser('~/.cozy'))
         else:
-            result = self.parser.read(filename)
+            result = self.parser.read(self.filename)
         if len(result) == 0:
             self.parser.add_section('globals')
             self.parser.add_section('backup_location')
             self.parser.add_section('backup')
             self.backup_id = random.randint(1, 100000)
+        self.__set_unchanged()
 
+
+    def __set_unchanged(self):
         self.backup_id_changed = False
         self.backup_enabled_changed = False
         self.data_path_changed = False
         self.backup_location_type_changed = False
         self.backup_location_identifier_changed = False
         self.backup_type_changed = False
-
-    def write(self):
-        with open(os.path.expanduser('~/.cozy'), 'w') as fp:
-            self.parser.write(fp)
 
     def __get_backup_enabled(self):
         try:

@@ -61,43 +61,40 @@ class CozyIcon(gtk.StatusIcon):
                  restore_client_connector, restore_control_center, location_manager):
         gtk.StatusIcon.__init__(self)
 
-        self.connect_object("popup-menu", CozyIcon.on_popup_menu, self)
-
         self.notification_service = notification_service
         self.mainloop = mainloop
 
         self.config = config
-        self.config_dialog = None
-        self.restore_frontend = None
         self.restore_client_connector = restore_client_connector
         self.restore_control_center = restore_control_center
         self.location_manager = location_manager
 
         self.restore_backend = restore_backend
-        self.restore_backend.connect_to_signal('available', self.set_backup_location_available)
-        self.restore_backend.connect_to_signal('unavailable', self.set_backup_location_unavailable)
+        self.restore_backend.connect_to_signal('available', self.__on_backup_location_available)
+        self.restore_backend.connect_to_signal('unavailable', self.__on_backup_location_unavailable)
+
+        self.config_dialog = None
+        self.restore_frontend = None
 
         self.__update_backup_availability()
+        self.connect_object("popup-menu", CozyIcon.on_popup_menu, self)
 
         if not self.config.backup_enabled:
             self.on_show_config_dialog(None)
 
     def __update_backup_availability(self):
         if self.restore_backend.is_backup_location_available():
-            self.set_backup_location_available()
+            self.__on_backup_location_available()
         else:
-            self.set_backup_location_unavailable()
+            self.__on_backup_location_unavailable()
 
-    def set_backup_location_available(self):
+    def __on_backup_location_available(self):
         self.set_from_icon_name(COZY_ICON_NAME)
-        self.__show_message("Backup Volume Connected", "Click here if you want to back up your data now.")
         self.__create_available_menu()
 
-    def set_backup_location_unavailable(self):
+    def __on_backup_location_unavailable(self):
         self.set_from_icon_name(COZY_ICON_NAME_UNAVAILABLE)
         self.__create_unavailable_menu()
-
-
 
     def __create_available_menu(self):
         self.menu = gtk.Menu()
@@ -155,7 +152,12 @@ class CozyIcon(gtk.StatusIcon):
             backup_location = self.location_manager.get_backup_location(self.config)
             self.restore_backend.set_backup_location(backup_location)
             self.__update_backup_availability()
-
+            if self.config.backup_location_type == 'absolute_path':
+                message = "Your data will backed up automatically every full hour. " + \
+                "Whenever you would like to back up your data manually, click on the Symbol."
+            else:
+                message = "Whenever you would like to back up your data, click on the Symbol."
+            self.__show_message("Finished Cozy Configuration", message)
 
     def on_exit(self, widget):
         self.mainloop.quit()

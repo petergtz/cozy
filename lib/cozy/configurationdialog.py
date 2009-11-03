@@ -42,8 +42,6 @@ BUILDER_XML_PATH = os.path.join(BASE_DIR, 'configuration_dialog.xml')
 
 class ConfigMediator:
     def __init__(self, program_paths, config, return_func):
-
-#        self.parent = parent
         self.builder = gtk.Builder()
         self.builder.add_from_file(BUILDER_XML_PATH)
 
@@ -123,9 +121,6 @@ class ConfigMediator:
         self.global_sections.set_sensitive(widget.get_active())
         self.config.backup_enabled = widget.get_active()
 
-        self.on_permanent_mode_changed(self.permanent_radio)
-        self.on_temporary_mode_changed(self.temp_radio)
-
     def on_choose_source_btn_clicked(self, widget, data=None):
         dlg = gtk.FileChooserDialog(action=gtk.FILE_CHOOSER_ACTION_SELECT_FOLDER,
                                     buttons=(gtk.STOCK_CANCEL, gtk.RESPONSE_CANCEL, gtk.STOCK_OPEN, gtk.RESPONSE_OK))
@@ -135,7 +130,6 @@ class ConfigMediator:
         dlg.destroy()
 
     def on_permanent_mode_changed(self, widget, data=None):
-        if self.config.backup_enabled:
             if widget.get_active():
                 self.config.backup_location_type = 'absolute_path'
                 self.permanent_group.set_sensitive(True)
@@ -143,7 +137,6 @@ class ConfigMediator:
                 self.permanent_group.set_sensitive(False)
 
     def on_temporary_mode_changed(self, widget, data=None):
-        if self.config.backup_enabled:
             if widget.get_active():
                 self.config.backup_location_type = 'removeable_volume'
                 self.temp_group.set_sensitive(True)
@@ -171,78 +164,77 @@ class ConfigMediator:
         dlg.destroy()
 
     def on_radio_cozyfs_changed(self, widget, data=None):
-        if self.config.backup_enabled:
-            if widget.get_active():
-                self.config.backup_type = 'CozyFS'
+        if widget.get_active():
+            self.config.backup_type = 'CozyFS'
 
     def on_radio_plainfs_changed(self, widget, data=None):
-        if self.config.backup_enabled:
-            if widget.get_active():
-                self.config.backup_type = 'PlainFS'
+        if widget.get_active():
+            self.config.backup_type = 'PlainFS'
 
     def on_reset(self, widget, data=None):
-        self.config = Configuration()
+        self.config.forget_changes()
         self.__setup_controls()
 
     def on_close(self, widget, data=None):
-        if not self.delete_event(widget, None):
+        if self.__can_close():
            self.destroy(widget, data)
 
-
-    def __add_backup_applet_autostart(self):
-        entry = xdg.DesktopEntry.DesktopEntry(os.path.join(xdg.BaseDirectory.xdg_config_home, 'autostart', 'cozy-backup-applet.desktop'))
-        entry.set("Type", "Application")
-        entry.set("Name", "Cozy Backup Applet")
-        entry.set("Exec", self.program_paths.COZY_BACKUP_APPLET_PATH)
-        entry.set("Icon", "cozy")
-        entry.write()
-
-
-    def __remove_restore_backend_autostart(self):
-        if os.path.exists(os.path.join(xdg.BaseDirectory.xdg_config_home, 'cozy-restore-backend.desktop')):
-            os.remove(os.path.join(xdg.BaseDirectory.xdg_config_home, 'cozy-restore-backend.desktop'))
-
-    def __remove_backup_applet_autostart(self):
-        if os.path.exists(os.path.join(xdg.BaseDirectory.xdg_config_home, 'cozy-backup-applet.desktop')):
-            os.remove(os.path.join(xdg.BaseDirectory.xdg_config_home, 'cozy-backup-applet.desktop'))
-
     def delete_event(self, widget, event, data=None):
+        return not self.__can_close()
+
+    def __can_close(self):
         if self.config.changed():
-            self.config.write()
-            if not self.config.backup_enabled:
-                self.__remove_crontab_entry()
-                self.__remove_backup_applet_autostart()
+            return self.__can_close_although_changed()
+        else:
+            return True
+
+    def __can_close_although_changed(self):
+        if self.__config_is_incomplete():
+            result = self.__handle_incomplete_config()
+            if result == 'cannot_close':
                 return False
+        return True
 
-            if self.config.backup_location_identifier is None or self.config.data_path is None:
-                dialog = self.builder.get_object("config_not_complete_confirmation_dialog")
-                result = dialog.run()
-                dialog.hide()
 
-                if result == 2:
-                    return True
-                else:
-                    self.config.backup_enabled = False
-                    return self.delete_event(widget, event, data)
+    def __config_is_incomplete(self):
+        return self.config.backup_location_identifier is None or self.config.data_path is None
 
-#            location_manager = LocationManager(dbus.SystemBus())
-#            backup_location = location_manager.get_backup_location()
-#            subprocess.call([COZY_MKFS_PATH, backup_location.get_path(), str(self.config.backup_id)])
-            if self.permanent_radio.get_active():
-                self.__add_crontab_entry()
-                self.__remove_backup_applet_autostart()
-            else:
-                self.__remove_crontab_entry()
-                self.__add_backup_applet_autostart()
-        return False
+    def __handle_incomplete_config(self):
+        result = self.__show_confirmation_dailog_and_return_result()
+        if result == 2:
+            return 'cannot_close'
+        else:
+            self.config.backup_enabled = False
+            return 'can_close'
+
+    def __show_confirmation_dailog_and_return_result(self):
+        dialog = self.builder.get_object("config_not_complete_confirmation_dialog")
+        result = dialog.run()
+        dialog.hide()
+        return result
 
     def destroy(self, widget, data=None):
         self.configuration_window.hide()
+
+        self.config.write()
+        self.__react_on_config_changes()
+
         self.return_func()
+
+
+    def __react_on_config_changes(self):
+        if self.config.backup_enabled:
+            self.__add_backup_applet_autostart()
+            if self.config.backup_location_type == 'absolute_path':
+                self.__add_crontab_entry()
+            else:
+                self.__remove_crontab_entry()
+        else:
+            self.__remove_crontab_entry()
+            self.__remove_backup_applet_autostart()
 
     def present(self):
         self.configuration_window.present()
-
 
     def __add_crontab_entry(self):
         pid = subprocess.Popen(['crontab', '-l'], stdout=subprocess.PIPE)
@@ -260,6 +252,18 @@ class ConfigMediator:
         pid = subprocess.Popen(['crontab', '-'], stdin=subprocess.PIPE)
         pid.stdin.write(new_crontab)
         pid.stdin.close()
+
+    def __add_backup_applet_autostart(self):
+        entry = xdg.DesktopEntry.DesktopEntry(os.path.join(xdg.BaseDirectory.xdg_config_home, 'autostart', 'cozy-backup-applet.desktop'))
+        entry.set("Type", "Application")
+        entry.set("Name", "Cozy Backup Applet")
+        entry.set("Exec", self.program_paths.COZY_BACKUP_APPLET_PATH)
+        entry.set("Icon", "cozy")
+        entry.write()
+
+    def __remove_backup_applet_autostart(self):
+        if os.path.exists(os.path.join(xdg.BaseDirectory.xdg_config_home, 'cozy-backup-applet.desktop')):
+            os.remove(os.path.join(xdg.BaseDirectory.xdg_config_home, 'cozy-backup-applet.desktop'))
 
 
     def show_all(self):
