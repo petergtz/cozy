@@ -1,6 +1,12 @@
-Install-Instructions
+Install-Instructions for Local Install
 =====================
 
 Execute local-install.sh from the command line. No superuser needed.
- 
-No further installation steps needed.
+This will install the cozy icons.
+
+You need a patched version of nautilus. The patch is in the nautilus-patch
+directory. Download nautilus 2.24.1, apply this patch within the source directory
+and build it from source.
+
+Now replace /usr/bin/nautilus by your freshly built version.
+For a more up-to-date howto: http://cozy.sourceforge.net/
