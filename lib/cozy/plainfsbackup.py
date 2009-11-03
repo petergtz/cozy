@@ -59,7 +59,7 @@ class PlainFSBackup(Backup):
         versions.sort()
         i = versions.index(str(current_version)) - 1
         if i == -1:
-            return None
+            return self.VERSION_NONE
         else:
             return int(versions[i])
 
@@ -68,6 +68,6 @@ class PlainFSBackup(Backup):
         versions.sort()
         i = versions.index(str(base_version)) + 1
         if i == len(versions):
-            return None
+            return self.VERSION_PRESENT
         else:
             return int(versions[i])
