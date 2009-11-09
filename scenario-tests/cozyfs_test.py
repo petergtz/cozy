@@ -4,9 +4,14 @@ import sys
 import os
 import shutil
 from time import sleep
+import time
 import subprocess
 import sqlite3
 import stat
+
+import pwd
+import tempfile
+import traceback
 
 TC_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(TC_DIR, 'SimpleCozyFSTestData')
@@ -17,8 +22,11 @@ COZYFS_PATH = os.path.join(ROOT_DIR, 'cozyfs', 'cozyfs.py')
 MKFS_PATH = os.path.join(ROOT_DIR, 'cozyfs', 'mkfs.cozyfs.py')
 SNAPSHOT_PATH = os.path.join(ROOT_DIR, 'cozyfs', 'cozyfssnapshot.py')
 DBFILE = "fsdb"
-TARGET_DIR = os.path.expanduser('~/MyBackup')
 
+loginname = pwd.getpwuid(os.getuid())[0]
+TARGET_DIR = tempfile.mkdtemp(prefix='cozy-' + loginname)
+
+SUCCESSFUL_MOUNT_TIMEOUT = 2
 
 
 def make_cozyfs(target_dir, backup_id):
@@ -39,18 +47,55 @@ def make_cozyfs(target_dir, backup_id):
     return stdout
 
 
-def mount(mountpath, target_dir, backup_id, version=None):
-    os.mkdir(mountpath)
-    cmdline = [COZYFS_PATH, mountpath, '-f', '-o']
-    cmdline.append('target_dir=' + target_dir + ',backup_id=' + str(backup_id))
+def mount(mount_point, target_dir, backup_id, version=None, as_readonly=False):
+    os.mkdir(mount_point)
+    try:
+        cmdline = __build_cmdline(mount_point, target_dir, backup_id, version, as_readonly)
+        print '### MOUNTING: ' + ' '.join(cmdline)
+        process = subprocess.Popen(cmdline)
+        process.args = cmdline
+        __wait_until_filesystem_is_mounted(process, mount_point)
+        os.chdir(mount_point)
+
+    except Exception, e:
+        sys.exit('### FAILED mount. Error: ' + str(e))
+
+
+def __build_cmdline(mount_point, target_dir, backup_id, version, as_readonly):
+    cmdline = [COZYFS_PATH, mount_point, '-o', 'target_dir=' + target_dir + ',backup_id=' + str(backup_id), '-f']
     if version is not None:
-        cmdline[-1] = cmdline[-1] + ',version=' + version
-    print '### MOUNTING: ' + ' '.join(cmdline)
-    process = subprocess.Popen(cmdline)
-    sleep(2)
-    if process.poll() != None:
-        sys.exit('### FAILED mount')
-    os.chdir(mountpath)
+        cmdline[-2] = cmdline[-2] + ',version=' + str(version)
+    if as_readonly:
+        cmdline[-2] = cmdline[-2] + ',ro'
+    return cmdline
+
+def __wait_until_filesystem_is_mounted(process, mount_point):
+    start_time = time.time()
+    time_passed = 0
+
+    while (time_passed < SUCCESSFUL_MOUNT_TIMEOUT):
+        mtab_file = open('/etc/mtab', 'r')
+        mtab_string = mtab_file.read()
+        mtab_file.close()
+        if mtab_string.find(mount_point) != -1:
+            return
+        time_passed = time.time() - start_time
+    __handle_return_code_of(process)
+
+def __handle_return_code_of(process):
+    if  process.returncode == 3:
+        raise Exception('Error: Mount failed because database couldn''t be found.')
+    elif  process.returncode == 4:
+        raise Exception('Error: Mount failed because filesystem is locked.')
+    else:
+        (stdoutdata, stderrdata) = process.communicate()
+        raise Exception('Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: ' + stderrdata + stdoutdata)
+
+
+
+
+
+
 
 def snapshot(target_dir, backup_id, based_on_version=None):
     cmdline = [SNAPSHOT_PATH, target_dir, str(backup_id)]
@@ -174,10 +219,14 @@ def rmtree(path):
 def copy(source, target):
     try:
         shutil.copy(source, target)
-
         if not os.access(target, os.F_OK):
             raise Exception('Could not access ' + target)
-        if open(target).read() != open(source).read():
+        target_content = open(target).read()
+        source_content = open(source).read()
+        if target_content != source_content:
+            print 'source: ', source_content
+            print
+            print 'target: ', target_content
             raise Exception('compare failed: ' + source + ' ' + target)
 
     except Exception, e:
@@ -258,6 +307,10 @@ def clean_db():
     db.execute('DELETE FROM Nodes')
     db.commit()
 
+def clean_mount_dir():
+    os.system('rm -rf ' + TARGET_DIR)
+
+
 
 def clean_file_pool():
     os.system('rm -rf ' + os.path.join(TARGET_DIR, 'FilePool/*'))
@@ -271,7 +324,20 @@ def umount(mountpath):
     print '### UNMOUNTING'
     os.chdir('/')
     os.system('fusermount -z -u ' + mountpath)
+    __wait_until_filesystem_is_unmounted(mountpath)
     shutil.rmtree(mountpath)
+
+def __wait_until_filesystem_is_unmounted(mount_point):
+    start_time = time.time()
+    time_passed = 0
+
+    while (time_passed < SUCCESSFUL_MOUNT_TIMEOUT):
+        mtab_file = open('/etc/mtab', 'r')
+        mtab_string = mtab_file.read()
+        mtab_file.close()
+        if mtab_string.find(mount_point) > -1:
+            return
+        time_passed = time.time() - start_time
 
 def remove_cozyfs(target_dir, backup_id):
     os.rmdir(os.path.join(TARGET_DIR, 'FilePool'))
@@ -284,12 +350,12 @@ mountpath = '/tmp/cozy-TestCase'
 try:
     make_cozyfs(target_dir=TARGET_DIR, backup_id=666)
 
-    mount(mountpath, target_dir=TARGET_DIR, backup_id=666)
+    mount(mountpath, TARGET_DIR, 666)
     mkdir('folder1')
     neg_mkdir('folder1')
     umount(mountpath)
 
-    mount(mountpath, target_dir=TARGET_DIR, backup_id=666)#, version=version1)
+    mount(mountpath, TARGET_DIR, 666)#, version=version1)
     neg_mkdir('folder1')
     move('folder1', 'folder1_renamed')
     copy(os.path.join(DATA_DIR, 'file1'), 'file1')
@@ -298,16 +364,16 @@ try:
 
     version2 = snapshot(TARGET_DIR, 666)#, based_on_version=version1)
 
-    mount(mountpath, target_dir=TARGET_DIR, backup_id=666, version=version2)
+    mount(mountpath, TARGET_DIR, 666, version2)
     mkdirs('folder2/folder3')
     copy(os.path.join(DATA_DIR, 'file1'), 'file2')
     copy(os.path.join(DATA_DIR, 'file2'), './folder1_renamed/file1')
     copy(os.path.join(DATA_DIR, 'file1'), 'overwriter')
     umount(mountpath)
 
-    version3 = snapshot(TARGET_DIR, '666', version2)
+    version3 = snapshot(TARGET_DIR, 666, version2)
 
-    mount(mountpath, target_dir=TARGET_DIR, backup_id=666, version=version3)
+    mount(mountpath, TARGET_DIR, 666, version3)
     copy(os.path.join(DATA_DIR, 'file1'), 'overwriter')
 #    raw_input()
     mkdir('folder4')
@@ -329,22 +395,21 @@ try:
     umount(mountpath)
 
 
-    mount(mountpath, target_dir=TARGET_DIR, backup_id=666, version=version2)
+    mount(mountpath, TARGET_DIR, 666, version2)
 
     neg_exists('folder4')
     neg_mkdir('folder4')
     # negativ mount tests to be done
 
     check_tmp_dir()
-except Exception, e:
-    raise
 finally: # clean up in any case!
     umount(mountpath)
     sleep(1)
-    clean_db()
-    clean_file_pool()
+    clean_mount_dir()
+#    clean_db()
+#    clean_file_pool()
 #    clean_tmp_dir()
 
-    remove_cozyfs(target_dir=TARGET_DIR, backup_id=666)
+#    remove_cozyfs(target_dir=TARGET_DIR, backup_id=666)
 
 print '### EXITING SUCCESSFULLY'
