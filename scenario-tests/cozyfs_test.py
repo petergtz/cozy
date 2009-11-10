@@ -47,10 +47,10 @@ def make_cozyfs(target_dir, backup_id):
     return stdout
 
 
-def mount(mount_point, target_dir, backup_id, version=None, as_readonly=False):
+def mount(device_dir, mount_point, backup_id, version=None, as_readonly=False):
     os.mkdir(mount_point)
     try:
-        cmdline = __build_cmdline(mount_point, target_dir, backup_id, version, as_readonly)
+        cmdline = __build_cmdline(device_dir, mount_point, backup_id, version, as_readonly)
         print '### MOUNTING: ' + ' '.join(cmdline)
         process = subprocess.Popen(cmdline)
         process.args = cmdline
@@ -61,12 +61,13 @@ def mount(mount_point, target_dir, backup_id, version=None, as_readonly=False):
         sys.exit('### FAILED mount. Error: ' + str(e))
 
 
-def __build_cmdline(mount_point, target_dir, backup_id, version, as_readonly):
-    cmdline = [COZYFS_PATH, mount_point, '-o', 'target_dir=' + target_dir + ',backup_id=' + str(backup_id), '-f']
+def __build_cmdline(device_dir, mount_point, backup_id, version, as_readonly):
+    cmdline = [COZYFS_PATH, device_dir, mount_point, '-b', str(backup_id)]
     if version is not None:
-        cmdline[-2] = cmdline[-2] + ',version=' + str(version)
+        cmdline.append('-v')
+        cmdline.append(str(version))
     if as_readonly:
-        cmdline[-2] = cmdline[-2] + ',ro'
+        cmdline.append('-r')
     return cmdline
 
 def __wait_until_filesystem_is_mounted(process, mount_point):
@@ -89,7 +90,7 @@ def __handle_return_code_of(process):
         raise Exception('Error: Mount failed because filesystem is locked.')
     else:
         (stdoutdata, stderrdata) = process.communicate()
-        raise Exception('Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: ' + stderrdata + stdoutdata)
+        raise Exception('Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: ' + str(stderrdata) + str(stdoutdata))
 
 
 
@@ -350,12 +351,12 @@ mountpath = '/tmp/cozy-TestCase'
 try:
     make_cozyfs(target_dir=TARGET_DIR, backup_id=666)
 
-    mount(mountpath, TARGET_DIR, 666)
+    mount(TARGET_DIR, mountpath, 666)
     mkdir('folder1')
     neg_mkdir('folder1')
     umount(mountpath)
 
-    mount(mountpath, TARGET_DIR, 666)#, version=version1)
+    mount(TARGET_DIR, mountpath, 666)
     neg_mkdir('folder1')
     move('folder1', 'folder1_renamed')
     copy(os.path.join(DATA_DIR, 'file1'), 'file1')
@@ -364,7 +365,7 @@ try:
 
     version2 = snapshot(TARGET_DIR, 666)#, based_on_version=version1)
 
-    mount(mountpath, TARGET_DIR, 666, version2)
+    mount(TARGET_DIR, mountpath, 666, version2)
     mkdirs('folder2/folder3')
     copy(os.path.join(DATA_DIR, 'file1'), 'file2')
     copy(os.path.join(DATA_DIR, 'file2'), './folder1_renamed/file1')
@@ -373,7 +374,7 @@ try:
 
     version3 = snapshot(TARGET_DIR, 666, version2)
 
-    mount(mountpath, TARGET_DIR, 666, version3)
+    mount(TARGET_DIR, mountpath, 666, version3)
     copy(os.path.join(DATA_DIR, 'file1'), 'overwriter')
 #    raw_input()
     mkdir('folder4')
@@ -389,13 +390,13 @@ try:
 
     version4 = snapshot(TARGET_DIR, 666, version3)
 
-    mount(mountpath, target_dir=TARGET_DIR, backup_id=666, version=version4)
+    mount(TARGET_DIR, mountpath, backup_id=666, version=version4)
     compare_file_content(os.path.join(DATA_DIR, 'image1.jpg'), 'folder4/hardlink_to_image.jpg')
     compare_file_content('softlink_to_image.jpg', 'folder4/hardlink_to_image.jpg')
     umount(mountpath)
 
 
-    mount(mountpath, TARGET_DIR, 666, version2)
+    mount(TARGET_DIR, mountpath, 666, version2)
 
     neg_exists('folder4')
     neg_mkdir('folder4')

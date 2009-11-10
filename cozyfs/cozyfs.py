@@ -38,13 +38,10 @@ from cozyutils.md5sum import md5sum, md5sum_from_string
 import logging
 
 import time
-#import xdelta3
-import threading
 
 import cProfile
 
-from Queue import Queue
-
+import optparse
 
 DBFILE = "fsdb"
 
@@ -64,68 +61,6 @@ class xdelta3:
     def xd3_main_cmdline(cmdline):
         subprocess.call(cmdline)
 
-
-class DatabaseConnection(object):
-    def __init__(self, db_filename):
-        threading.Thread.__init__(self)
-        self.db = db
-        self.reqs = Queue(1)
-        self.counter = 0
-#        self.lastrowid = Queue()
-
-    def run(self):
-        try:
-            db = sqlite3.connect(self.db)
-            db.row_factory = sqlite3.Row
-            db.text_factory = str
-        except sqlite3.OperationalError, e:
-            sys.stderr.write("Error: Could not open database file\n")
-            exit(3)
-        cursor = db.cursor()
-        while True:
-            req, arg, res = self.reqs.get()
-            if req == '--close--': break
-#            print req
-            cursor.execute(req, arg)
-#            print 'finished', req
-#            self.lastrowid.put(cursor.lastrowid)
-            if req.startswith('InSeRt'):
-                res.put(cursor.lastrowid)
-            else:
-                if res:
-                    for rec in cursor:
-                        res.put(rec)
-                    res.put('--no more--')
-            self.counter += 1
-            if self.counter > 100:
-                self.counter = 0
-                db.commit()
-            self.reqs.task_done()
-
-        db.commit()
-        self.reqs.task_done()
-        db.close()
-
-    def execute(self, req, arg=None, res=None):
-        self.reqs.put((req, arg or tuple(), res))
-
-    def insert(self, req, arg=None):
-        res = Queue()
-        req = req.replace('insert', 'InSeRt')
-        self.execute(req, arg, res)
-        return res.get()
-
-    def select(self, req, arg=None):
-        res = Queue()
-        self.execute(req, arg, res)
-        while True:
-            rec = res.get()
-            if rec == '--no more--': break
-            yield rec
-
-    def close(self):
-        self.execute('--close--')
-        self.reqs.join()
 
 
 def query2log(query):
@@ -150,92 +85,65 @@ class Stat(fuse.Stat):
 #        fuse.Stat.__init__(self)
 
 
+
 class CozyFS(fuse.Fuse):
-    def __init__(self, *args, **kw):
+    def __init__(self, db, input_params, *args, **kw):
         fuse.Fuse.__init__(self, *args, **kw)
-#        self.multithreaded = False # CHECKME: is this really necessary
+        self.multithreaded = False # CHECKME: is this really necessary
+        self.log = logging.getLogger('cozyfs')
+        self.db = db
+        self.readonly = input_params.readonly
+        self.version = input_params.version
+        self.backup_id = input_params.backup_id
+        self.fuse_args.mountpoint = input_params.mountpoint
+        self.device_dir = input_params.device_dir
+
+        self.__init_cache()
+        self.__init_version_if_not_supplied()
+        self.__set_readonly_if_version_is_base()
+        self.__create_lock_file_if_not_readonly()
+        self.__init_base_versions()
+
+    def __init_cache(self):
         self.cached_node_ids = dict()
         self.cached_inodes = dict()
         self.cached_attributes = dict()
-        self.commit_counter = 0
-        self.log = logging.getLogger('cozyfs')
-#        self.transactions = Queue.Queue(MAX_TRANSACTIONS)
 
-
-#    def __init_cached_file_tree(self):
-#        query = "select nodename, node_id, parent_node_id from Nodes where " + self.__backup_id_versions_where_statement('Nodes') + " group by node_id order by node_id, version desc"
-#        self.db.execute(query)
-#        self.cached_file_tree = []
-
-#    def __init_cached_inodes(self):
- #   	for pair in self.db.execute('SELECT node_id, inode FROM Hardlinks'):
-  #  		self.cached_inodes[pair[0]] = pair[1]
-
-    def main(self):
-
-        if not hasattr(self, "target_dir"):
-            exit('No target dir for backup data specified')
-        if not hasattr(self, "backup_id"):
-            exit("no backup_id given")
-
-        try:
-            db = sqlite3.connect(self.target_dir + "/" + DBFILE)
-            db.row_factory = sqlite3.Row
-            db.text_factory = str
-        except sqlite3.OperationalError, e:
-            sys.stderr.write("Error: Could not open database file: " + self.target_dir + "/" + DBFILE + "\n")
-            exit(3)
-#            raise "Error: Could not open database file: "+self.target_dir+"/"+DBFILE+"\n"
-
-
-        self.readonly = True
-
-        if not hasattr(self, "version"):
-            ret = db.execute('SELECT version FROM Versions WHERE backup_id=? ORDER BY version DESC', (self.backup_id,)).fetchone()
+    def __init_version_if_not_supplied(self):
+        if self.version is None:
+            ret = self.db.execute('SELECT version FROM Versions WHERE backup_id=? ORDER BY version DESC', (self.backup_id,)).fetchone()
             if ret == None:
-
                 exit('backup_id does not exist in filesystem')
             self.version = ret[0]
 
-        # check if another version is based on this one and set read/write flag accordingly
-        cursor = db.execute("select * from Versions where based_on_version=? and backup_id=?", (int(self.version), int(self.backup_id)))
-        if cursor.fetchone() == None:
-            self.readonly = False
-        cursor.close()
-
-        if hasattr(self, 'ro'):
+    def __set_readonly_if_version_is_base(self):
+        cursor = self.db.execute("select * from Versions where based_on_version=? and backup_id=?", (int(self.version), int(self.backup_id)))
+        if cursor.fetchone() is not None:
             self.readonly = True
 
+    def __create_lock_file_if_not_readonly(self):
         if self.readonly == False:
-            self.lockfile = os.path.join(self.target_dir, 'lock')
+            self.lockfile = os.path.join(self.device_dir, 'lock')
             if os.path.exists(self.lockfile):
                 sys.stderr.write("Error: Filesystem is already mounted. If not, please remove " + self.lockfile + " manually and try again.\n")
                 exit(4)
 
             os.mknod(self.lockfile)
 
+    def __init_base_versions(self):
         version = int(self.version)
         self.versions = []
         while version != None:
             self.versions.append(version)
-            cursor = db.execute("select based_on_version from Versions where version=? and backup_id=?", (version, self.backup_id))
+            cursor = self.db.execute("select based_on_version from Versions where version=? and backup_id=?", (version, self.backup_id))
             version = cursor.fetchone()[0]
-            cursor.close() # Todo: should avoid open and close the cursor
 
         self.log.debug("Backup_id: %s, Versions: %s", self.backup_id, self.versions)
 
-        db.close()
-
-        self.db = MultiThreadOK(self.target_dir + "/" + DBFILE)
-
-        return fuse.Fuse.main(self)
-
 
     def close(self):
-        if self.readonly == False:
+        if not self.readonly:
             os.remove(self.lockfile)
-        self.db.close()
-        time.sleep(1)
 
     def __backup_id_versions_where_statement(self, table_name):
         return " (backup_id = " + self.backup_id + " AND (" + (table_name + ".version = ") + (" or " + table_name + ".version = ").join(map(str, self.versions)) + ") ) "
@@ -251,29 +159,34 @@ class CozyFS(fuse.Fuse):
 
         parent_node_id = 0
         built_path = '/'
-        for nodename in path.split('/')[1:-1]:
-            if self.cached_node_ids.has_key(os.path.join(built_path, nodename)):
-                parent_node_id = self.cached_node_ids[os.path.join(built_path, nodename)]
+        for nodename in path.split('/')[1:]:
+            new_built_path = os.path.join(built_path, nodename)
+            if self.cached_node_ids.has_key(new_built_path):
+                parent_node_id = self.cached_node_ids[os.path.join(new_built_path)]
             else:
-                parent_node_id = '(' + "select node_id from Nodes where " + self.__backup_id_versions_where_statement('Nodes') + " group by node_id having nodename='" + nodename + "' and parent_node_id=" + str(parent_node_id) + " order by node_id, version desc" + ')'
+                parent_node_id = "select node_id from Nodes where " + \
+                                 self.__backup_id_versions_where_statement('Nodes') + \
+                                 " group by node_id having nodename='" + nodename + \
+                                 "' and parent_node_id=(" + str(parent_node_id) + ") order by node_id, version desc"
 
-            built_path = os.path.join(built_path, nodename)
+            built_path = new_built_path
 
-        query = "select node_id from Nodes where " + self.__backup_id_versions_where_statement('Nodes') + " group by node_id having nodename='" + path.split('/')[-1] + "' and parent_node_id=" + str(parent_node_id) + " order by node_id, version desc"
-        cursor = self.db.select(query)#self.db.execute(query).fetchone()
-        for row in cursor:
+
+        query = parent_node_id
+        row = self.db.execute(query).fetchone()
+
+        if row is None:
+            self.cached_node_ids[path] = None
+        else:
             self.cached_node_ids[path] = row[0]
-            return row[0]
+        return self.cached_node_ids[path]
 
-        self.cached_node_ids[path] = None
-        return None
 
     def __get_inode(self, node_id):
         if self.cached_inodes.has_key(node_id):
             return self.cached_inodes[node_id]
 
-#        inode = self.db.execute('SELECT inode FROM Hardlinks WHERE node_id=?', (node_id,)).fetchone()[0]
-        inode = self.db.select('SELECT inode FROM Hardlinks WHERE node_id=?', (node_id,)).next()[0]
+        inode = self.db.execute('SELECT inode FROM Hardlinks WHERE node_id=?', (node_id,)).fetchone()[0]
         self.cached_inodes[node_id] = inode
         return inode
 
@@ -286,20 +199,20 @@ class CozyFS(fuse.Fuse):
         for attribute in attributes:
             self.log.debug('select ' + attribute + '  from ' + attribute + ' where inode=? and ' +
                         self.__backup_id_versions_where_statement(attribute) + ' order by version desc')
-#            cursor = self.db.execute('select ' + attribute + '  from ' + attribute + ' where inode=? and ' +
-#                        self.__backup_id_versions_where_statement(attribute) + ' order by version desc',
-#                        (row['inode'],))
-#            row[attribute] = cursor.fetchone()[0]
-            row[attribute] = self.db.select('select ' + attribute + '  from ' + attribute + ' where inode=? and ' +
+            cursor = self.db.execute('select ' + attribute + '  from ' + attribute + ' where inode=? and ' +
                         self.__backup_id_versions_where_statement(attribute) + ' order by version desc',
-                        (row['inode'],)).next()[0]
-#        cursor = self.db.execute('select type  from DataPaths where inode=? and ' +
-#                    self.__backup_id_versions_where_statement('DataPaths') + ' order by version desc',
-#                    (row['inode'],))
-#        row['type'] = cursor.fetchone()[0]
-        row['type'] = self.db.select('select type  from DataPaths where inode=? and ' +
+                        (row['inode'],))
+            row[attribute] = cursor.fetchone()[0]
+#            row[attribute] = self.db.select('select ' + attribute + '  from ' + attribute + ' where inode=? and ' +
+#                        self.__backup_id_versions_where_statement(attribute) + ' order by version desc',
+#                        (row['inode'],)).next()[0]
+        cursor = self.db.execute('select type  from DataPaths where inode=? and ' +
                     self.__backup_id_versions_where_statement('DataPaths') + ' order by version desc',
-                    (row['inode'],)).next()[0]
+                    (row['inode'],))
+        row['type'] = cursor.fetchone()[0]
+#        row['type'] = self.db.select('select type  from DataPaths where inode=? and ' +
+#                    self.__backup_id_versions_where_statement('DataPaths') + ' order by version desc',
+#                    (row['inode'],)).next()[0]
 
         self.cached_attributes[node_id] = row
         return row
@@ -307,6 +220,7 @@ class CozyFS(fuse.Fuse):
 
     def getattr(self, path):
 #        self.log.debug("path = '%s'",path)
+        print "HERE"
         st = Stat()
         if path == '/':
             st.st_nlink = 2 # FIXME: get number of links for DB
@@ -366,8 +280,8 @@ class CozyFS(fuse.Fuse):
         self.log.debug("PARAMS: path = '%s, offset = '%s'", path, offset)
         entries = ['.', '..']
         node_id = self.__get_node_id_from_path(path)
-        result = self.db.select("select nodename from Nodes where " + self.__backup_id_versions_where_statement('Nodes') + " group by node_id having parent_node_id=? order by node_id, version desc", (node_id,))
-        for c in result:
+        cursor = self.db.execute("select nodename from Nodes where " + self.__backup_id_versions_where_statement('Nodes') + " group by node_id having parent_node_id=? order by node_id, version desc", (node_id,))
+        for c in cursor:
             if c[0] != None:
                 self.log.debug(c[0])
                 entries.append(c[0])
@@ -375,7 +289,7 @@ class CozyFS(fuse.Fuse):
             yield fuse.Direntry(entry)
 
     def __get_new_inode(self):
-        ret = self.db.select('select max(inode) from Hardlinks').next()
+        ret = self.db.execute('select max(inode) from Hardlinks').fetchone()
         if ret[0] == None:
             return 1
         else:
@@ -413,8 +327,8 @@ class CozyFS(fuse.Fuse):
 
         query = 'insert into Hardlinks (node_id, inode) values (null,?)'
         self.log.debug(query2log(query), new_inode)
-        lastrowid = self.db.insert(query, (new_inode,))
-        new_node_id = lastrowid
+        cursor = self.db.execute(query, (new_inode,))
+        new_node_id = cursor.lastrowid
         self.cached_inodes[new_node_id] = new_inode
         self.cached_attributes[new_node_id] = {'inode': new_inode,
                                              'type': type,
@@ -432,13 +346,14 @@ class CozyFS(fuse.Fuse):
 
         if type == FILE:
             # although creating an empty file is not necessary it simplifies the open function later, since we have no special case
-            if not os.path.exists(self.target_dir + '/FilePool/' + hash):
+            if not os.path.exists(self.device_dir + '/FilePool/' + hash):
                 try:
-                    open(self.target_dir + '/FilePool/' + hash, 'w').close()
+                    open(self.device_dir + '/FilePool/' + hash, 'w').close()
                 except:
                     return - errno.EIO # TODO: check if this is really the right error msg
 
         self.cached_node_ids[path] = new_node_id
+        self.db.commit()
         return 0
 
     def mknod(self, path, mode, dev): #TODO: if file already exists, only change file time. DO NOT empty file!
@@ -470,6 +385,7 @@ class CozyFS(fuse.Fuse):
         ctime = time.time()
         self.__update_attributes(self.__get_inode_from_path(new), {'atime': ctime, 'mtime':ctime})
 
+        self.db.commit()
         return 0
 
     def link(self, src_path, target_path):
@@ -480,12 +396,13 @@ class CozyFS(fuse.Fuse):
 
         pe = target_path.rsplit('/', 1)
         inode = self.__get_inode_from_path(src_path)
-        lastrowid = self.db.insert("insert into Hardlinks (node_id,inode) values (null,?)", (inode,))
-        new_node_id = lastrowid
+        cursor = self.db.execute("insert into Hardlinks (node_id,inode) values (null,?)", (inode,))
+        new_node_id = cursor.lastrowid
         self.cached_inodes[new_node_id] = inode
         self.cached_node_ids[target_path] = new_node_id
         self.db.execute("insert into Nodes (backup_id, version, node_id, parent_node_id, nodename) values (?,?,?,?,?)", \
                         (self.backup_id, self.versions[0], new_node_id, self.__get_node_id_from_path(pe[0]), pe[1]))
+        self.db.commit()
 
 
     def symlink(self, src_path, target_path):
@@ -510,8 +427,8 @@ class CozyFS(fuse.Fuse):
 
         query = 'insert into Hardlinks (node_id, inode) values (null,?)'
         self.log.debug(query2log(query), new_inode)
-        lastrowid = self.db.insert(query, (new_inode,))
-        new_node_id = lastrowid
+        cursor = self.db.execute(query, (new_inode,))
+        new_node_id = cursor.lastrowid
 
         self.cached_attributes[new_node_id] = {'inode': new_inode,
                                              'type': SOFT_LINK,
@@ -530,6 +447,7 @@ class CozyFS(fuse.Fuse):
         self.log.debug(query2log(query), self.backup_id, self.versions[0], new_node_id, basename, self.__get_node_id_from_path(dirname))
         self.db.execute(query, (self.backup_id, self.versions[0], new_node_id, basename, self.__get_node_id_from_path(dirname)))
 
+        self.db.commit()
         return 0
         #TODO: insert cached handling
 
@@ -539,24 +457,24 @@ class CozyFS(fuse.Fuse):
         return self.__get_data_path_from_path(path)
 
     def __has_base_nodes(self, node_id):
-        cursor = self.db.select("select count(*) from Nodes where node_id = ? and version <> ? and " + self.__backup_id_versions_where_statement('Nodes'), (node_id, self.versions[0])).next()
-        return cursor[0]
+        cursor = self.db.execute("select count(*) from Nodes where node_id = ? and version <> ? and " + self.__backup_id_versions_where_statement('Nodes'), (node_id, self.versions[0]))
+        return cursor.fetchone()[0]
 
     def __has_base_inodes(self, inode, attribute):
-        cursor = self.db.select('select count(*) from ' + attribute + ' where inode = ? and version <> ? and ' + self.__backup_id_versions_where_statement(attribute), (inode, self.versions[0])).next()
-        return cursor[0]
+        cursor = self.db.execute('select count(*) from ' + attribute + ' where inode = ? and version <> ? and ' + self.__backup_id_versions_where_statement(attribute), (inode, self.versions[0]))
+        return cursor.fetchone()[0]
 
     def __get_previous_version_of_data_path_from_inode(self, inode):
         return self.db.select("select data_path from DataPaths where inode = ? and version <> ? and " + self.__backup_id_versions_where_statement('DataPaths') + " order by version desc",
                                 (inode, self.backup_ids[0])).next()[0]
 
     def __has_current_node(self, node_id):
-        cursor = self.db.select("select count(*) from Nodes where node_id = ? and backup_id = ? and version = ?", (node_id, self.backup_id, self.versions[0])).next()
-        return cursor[0]
+        row = self.db.execute("select count(*) from Nodes where node_id = ? and backup_id = ? and version = ?", (node_id, self.backup_id, self.versions[0])).fetchone()
+        return row[0]
 
     def __has_current_inode(self, inode, attribute):
-        cursor = self.db.select('select count(*) from ' + attribute + ' where inode = ? and backup_id = ? and version = ?', (inode, self.backup_id, self.versions[0])).next()
-        return cursor[0]
+        cursor = self.db.execute('select count(*) from ' + attribute + ' where inode = ? and backup_id = ? and version = ?', (inode, self.backup_id, self.versions[0]))
+        return cursor.fetchone()[0]
 
 
     def unlink(self, path):
@@ -577,13 +495,13 @@ class CozyFS(fuse.Fuse):
 #            node_id = self.__get_node_id_from_path(path)
             data_path = self.__get_data_path_from_path(path)
             self.db.execute("delete from Nodes where backup_id=? and version=? and node_id=?", (self.backup_id, self.versions[0], node_id))
-            cursor = self.db.select("select count(node_id) from Nodes where node_id=?", (node_id,))
-            row = cursor.next()
+            cursor = self.db.execute("select count(node_id) from Nodes where node_id=?", (node_id,))
+            row = cursor.fetchone()
             if row[0] == 0:
                 self.db.execute("delete from Hardlinks where node_id=?", (node_id,))
 
-                cursor = self.db.select("select count(inode) from Hardlinks where inode=?", (inode,))
-                row = cursor.next()
+                cursor = self.db.execute("select count(inode) from Hardlinks where inode=?", (inode,))
+                row = cursor.fetchone()
                 if row[0] == 0:
                     self.db.execute("delete from DataPaths where inode=?", (inode,))
                     self.db.execute("delete from size where inode=?", (inode,))
@@ -602,6 +520,7 @@ class CozyFS(fuse.Fuse):
         del self.cached_node_ids[path]
         del self.cached_attributes[node_id]
         del self.cached_inodes[node_id]
+        self.db.commit()
         return 0
 
     def rmdir(self, path): # TODO: check if this is funciton is allowd to delete all sub-"nodes"
@@ -617,7 +536,7 @@ class CozyFS(fuse.Fuse):
         return self.unlink(path)
 
     def __get_data_path_from_path(self, path):
-        cursor = self.db.select("select data_path from DataPaths where inode=? and " + self.__backup_id_versions_where_statement('DataPaths') + ' order by version desc', (self.__get_inode_from_path(path),))
+        cursor = self.db.execute("select data_path from DataPaths where inode=? and " + self.__backup_id_versions_where_statement('DataPaths') + ' order by version desc', (self.__get_inode_from_path(path),))
 #        cursor = self.db.execute("select DataPaths.data_path from Hardlinks, DataPaths where Hardlinks.node_id=? and Hardlinks.inode=DataPaths.inode and " + self.__backup_id_versions_where_statement('DataPaths') + ' order by DataPaths.version desc', (self.__get_node_id_from_path(path),))
         for row in cursor:
             if row[0] == None: # not quite elegant. should be a better solution for handling None and empty string
@@ -658,7 +577,7 @@ class CozyFS(fuse.Fuse):
 
     def __patch_inode_to_target(self, inode, version, target_path):
         self.log.debug("PARAMS: backup_id = '%s' inode = '%s' target_path = '%s'", version, inode, target_path)
-        cursor = self.db.select('select data_path, type from DataPaths where inode=? and version<=? and ' +
+        cursor = self.db.execute('select data_path, type from DataPaths where inode=? and version<=? and ' +
                                     self.__backup_id_versions_where_statement('DataPaths') + 'order by version desc', (inode, version))
         hashes = []
         for row in cursor:
@@ -667,17 +586,17 @@ class CozyFS(fuse.Fuse):
                 break
 
         hashes.reverse()
-        shutil.copy(self.target_dir + '/FilePool/' + hashes[0], target_path)
+        shutil.copy(self.device_dir + '/FilePool/' + hashes[0], target_path)
         source = target_path
         result = target_path
         for hash in hashes[1:]: # TODO: use the merge option of xdelta instead!
-            diff = (self.target_dir + '/FilePool/' + hash)
+            diff = (self.device_dir + '/FilePool/' + hash)
             xdelta3.xd3_main_cmdline(['xdelta3', '-f', '-d', '-s', source, diff, result])
 
 
     def open(self, path, flags):
         self.log.debug("PARAMS: path = '%s', flags = %s", path, self.flags(flags))
-        target_path = self.target_dir + '/Tmp/' + path.replace('/', '_')
+        target_path = self.device_dir + '/Tmp/' + path.replace('/', '_')
         inode = self.__get_inode_from_path(path)
         if flags & os.O_WRONLY:
             if self.readonly:
@@ -760,7 +679,7 @@ class CozyFS(fuse.Fuse):
             # if this inode has more than the current version, then...
             if self.__has_base_inodes(inode, 'DataPaths'):
                 # ... build this previous version by patching it and calc the diff between this prev and the current version:
-                prev_data_path = self.target_dir + '/Tmp/' + path.replace('/', '_') + '.previous'
+                prev_data_path = self.device_dir + '/Tmp/' + path.replace('/', '_') + '.previous'
                 self.__patch_inode_to_target(inode, self.versions[1], prev_data_path)
                 xdelta3.xd3_main_cmdline(['xdelta3', '-e', '-s', prev_data_path, tmp_path, tmp_path + '.diff'])
                 os.remove(prev_data_path)
@@ -775,9 +694,9 @@ class CozyFS(fuse.Fuse):
 
             hash = md5sum(tmp_path)
 
-            if not os.path.exists(self.target_dir + '/FilePool/' + hash):
-                self.log.debug("Move %s to %s", tmp_path, self.target_dir + '/FilePool/' + hash)
-                shutil.move(tmp_path, self.target_dir + '/FilePool/' + hash)
+            if not os.path.exists(self.device_dir + '/FilePool/' + hash):
+                self.log.debug("Move %s to %s", tmp_path, self.device_dir + '/FilePool/' + hash)
+                shutil.move(tmp_path, self.device_dir + '/FilePool/' + hash)
             else:
                 os.remove(tmp_path)
 
@@ -789,15 +708,16 @@ class CozyFS(fuse.Fuse):
             self.__update_attributes(inode, {'size': filesize, 'atime': ctime, 'ctime':ctime, 'mtime':ctime})
 
             # clean the file pool, so that no orphaned files remain:
-            cursor = self.db.select("select count(*) from DataPaths where data_path=?", (old_hash,)).next()
-            if cursor[0] == 0:
-                os.remove(self.target_dir + '/FilePool/' + old_hash)
+            cursor = self.db.execute("select count(*) from DataPaths where data_path=?", (old_hash,))
+            if cursor.fetchone()[0] == 0:
+                os.remove(self.device_dir + '/FilePool/' + old_hash)
 
         else:
             os.remove(tmp_path)
             if not self.readonly:
                 self.__update_attributes(inode, {'atime': ctime})
 
+        self.db.commit()
         return 0
 
 
@@ -830,9 +750,9 @@ class CozyFS(fuse.Fuse):
         ctime = time.time()
 
         # Copy file to the tmp dir and truncate it:
-        tmp_path = self.target_dir + '/Tmp/' + path.replace('/', '_')
-        self.log.debug('Copy file %s to %s.', self.target_dir + '/FilePool/' + data_path, tmp_path)
-        shutil.copy(self.target_dir + '/FilePool/' + data_path, tmp_path)
+        tmp_path = self.device_dir + '/Tmp/' + path.replace('/', '_')
+        self.log.debug('Copy file %s to %s.', self.device_dir + '/FilePool/' + data_path, tmp_path)
+        shutil.copy(self.device_dir + '/FilePool/' + data_path, tmp_path)
         try:
             self.log.debug('Open, truncate and close file %s in r+ mode.', tmp_path)
             fh = open(tmp_path, 'r+')
@@ -843,19 +763,22 @@ class CozyFS(fuse.Fuse):
 
         # Calculate new data path=hash and move it back to the file pool:
         new_data_path = md5sum(tmp_path)
-        self.log.debug('Move file %s to %s.', tmp_path, self.target_dir + '/FilePool/' + new_data_path)
-        shutil.move(tmp_path, self.target_dir + '/FilePool/' + new_data_path)
+        self.log.debug('Move file %s to %s.', tmp_path, self.device_dir + '/FilePool/' + new_data_path)
+        shutil.move(tmp_path, self.device_dir + '/FilePool/' + new_data_path)
 
         # update database with new data path:
         self.__update_data_path(inode, new_data_path, FILE)
         self.__update_attributes(inode, {'size': length, 'atime': ctime, 'ctime':ctime, 'mtime':ctime})
 
-        # if there is no entry in the database anymore with the old data path=old hash, delete it:
-        cursor = self.db.select("select count(*) from DataPaths where data_path=?", (data_path,)).next()
-        if cursor[0] == 0:
-            os.remove(self.target_dir + '/FilePool/' + data_path)
+        if self.__no_entry_in_database_with(data_path):
+            os.remove(self.device_dir + '/FilePool/' + data_path)
 
+        self.db.commit()
         return 0
+
+    def __no_entry_in_database_with(self, data_path):
+        cursor = self.db.execute("select count(*) from DataPaths where data_path=?", (data_path,))
+        return cursor.fetchone()[0] == 0
 
 
     def flush(self, path, fh=None):
@@ -876,6 +799,7 @@ class CozyFS(fuse.Fuse):
 
         ctime = time.time()
         self.__update_attributes(self.__get_inode_from_path(path), {'gid': gid, 'uid': uid, 'atime': ctime, 'ctime':ctime})
+        self.db.commit()
         return 0
 
     def chmod(self, path, mode):
@@ -887,6 +811,7 @@ class CozyFS(fuse.Fuse):
 
         ctime = time.time()
         self.__update_attributes(self.__get_inode_from_path(path), {'mode': mode, 'atime': ctime, 'ctime':ctime})
+        self.db.commit()
         return 0
 
     def utimens(self, path, acc_nsec, mod_nsec):
@@ -897,7 +822,7 @@ class CozyFS(fuse.Fuse):
             return - errno.EROFS
 
         self.__update_attributes(self.__get_inode_from_path(path), {'atime': acc_nsec.tv_sec, 'mtime':mod_nsec.tv_sec})
-
+        self.db.commit()
         return 0
 
     def statfs(self):
@@ -914,8 +839,18 @@ class CozyFS(fuse.Fuse):
         return st
 
 
-def main():
-    sqlite3.enable_callback_tracebacks(True)
+def connect_to_database(db_filename):
+    try:
+        db = sqlite3.connect(db_filename)
+        db.row_factory = sqlite3.Row
+        db.text_factory = str
+        return db
+    except sqlite3.OperationalError, e:
+        sys.stderr.write("Error: Could not open database file\n")
+        exit(3)
+
+
+def initLogger():
     log = logging.getLogger('cozyfs')
     log.setLevel(logging.DEBUG)
 
@@ -923,15 +858,45 @@ def main():
     handler.setFormatter(logging.Formatter('  Line %(lineno)-3d %(levelname)-7s Fnc: %(funcName)-10s: %(message)s'))
     log.addHandler(handler)
 
-    FS = CozyFS(version="CozyFS version 0.1", usage='Usage not quite sure yet')
-    FS.parser.add_option(mountopt="target_dir", metavar="TARGET_DIR", default="", help="location of backup data")
-    FS.parser.add_option(mountopt="backup_id", metavar="BACKUP_ID", default="", help="mount backup from daspecified backup_id")
-    FS.parser.add_option(mountopt="version", metavar="BASE", default="", help="version of backup this backup is based up on")
-    FS.parser.add_option(mountopt="ro", metavar="READONLY", default="", help="version of backup this backup is based up on")
-    FS.parse(values=FS)
+class InputParameters:
+    pass
+
+def parse_commandline():
+    option_parser = optparse.OptionParser()
+    option_parser.add_option('-v', '--version', dest='version')
+    option_parser.add_option('-r', '--readonly', dest='readonly', default=False, action='store_true')
+    option_parser.add_option('-b', '--backup-id', dest='backup_id')
+    (options, args) = option_parser.parse_args()
+    if len(args) < 2:
+        sys.exit("PRINT USAGE")
+    input_params = InputParameters()
+    input_params.device_dir = args[0]
+    input_params.mountpoint = args[1]
+    input_params.backup_id = options.backup_id
+    input_params.version = options.version
+    input_params.readonly = options.readonly
+    return input_params
+
+
+def main():
+
+    input_params = parse_commandline()
+    initLogger()
+    db = connect_to_database(os.path.join(input_params.device_dir, DBFILE))
+
+    FS = CozyFS(db, input_params, fetch_mp=False, version="CozyFS version 0.1", usage='Usage not quite sure yet')
+#    FS.parser.add_option(mountopt="target_dir", metavar="TARGET_DIR", default="", help="location of backup data")
+#    FS.parser.add_option(mountopt="backup_id", metavar="BACKUP_ID", default="", help="mount backup from daspecified backup_id")
+#    FS.parser.add_option(mountopt="version", metavar="BASE", default="", help="version of backup this backup is based up on")
+#    FS.parser.add_option(mountopt="ro", TEST="READONLY", default="", help="version of backup this backup is based up on")
+    FS.parser.add_option("--test", metavar="READONLY", default="", help="version of backup this backup is based up on")
+#    FS.parse(values=FS)
+    FS.parse(['-f'])
+#    FS.parse(errex=1)
     FS.main()
     FS.close()
-    log.debug("REACHED THE END")
+    db.close()
+#    log.debug("REACHED THE END")
 
 
 if __name__ == '__main__':
