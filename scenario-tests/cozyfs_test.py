@@ -131,6 +131,20 @@ def mkdir(path):
     else:
         print '### PASSED mkdir', path
 
+def chown(path, uid, gid):
+    try:
+        os.chown(path, uid, gid)
+
+        actual_gid = os.stat(path)[stat.ST_GID]
+        actual_uid = os.stat(path)[stat.ST_UID]
+        if actual_gid != gid or actual_uid != uid:
+            raise Exception()
+
+    except Exception, e:
+        sys.exit('### FAILED chgrp ' + path + ': ' + str(e))
+    else:
+        print '### PASSED chgrp', path
+
 def mkdirs(path):
     try:
         os.makedirs(path)
@@ -379,6 +393,7 @@ try:
 #    raw_input()
     mkdir('folder4')
     mkdir('folder5')
+    chown('folder5', 1000, 1111)
     rmtree('folder5')
     rm('folder1_renamed/file1')
     copy(os.path.join(DATA_DIR, 'image1.jpg'), 'image.jpg')

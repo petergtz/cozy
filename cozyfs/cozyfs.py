@@ -93,28 +93,30 @@ class CozyFS(fuse.Fuse):
         self.log = logging.getLogger('cozyfs')
         self.db = db
         self.readonly = input_params.readonly
-        self.version = input_params.version
         self.backup_id = input_params.backup_id
         self.fuse_args.mountpoint = input_params.mountpoint
         self.device_dir = input_params.device_dir
 
         self.__init_cache()
-        self.__init_version_if_not_supplied()
+        self.version = self.__init_version(input_params.version)
         self.__set_readonly_if_version_is_base()
         self.__create_lock_file_if_not_readonly()
-        self.__init_base_versions()
+        self.__init_base_versions(self.version)
 
     def __init_cache(self):
-        self.cached_node_ids = dict()
+        self.cached_node_ids = {}
+        self.cached_node_ids['/'] = 0
         self.cached_inodes = dict()
         self.cached_attributes = dict()
 
-    def __init_version_if_not_supplied(self):
-        if self.version is None:
+    def __init_version(self, version):
+        if version is None:
             ret = self.db.execute('SELECT version FROM Versions WHERE backup_id=? ORDER BY version DESC', (self.backup_id,)).fetchone()
             if ret == None:
                 exit('backup_id does not exist in filesystem')
-            self.version = ret[0]
+            return ret[0]
+        else:
+            return version
 
     def __set_readonly_if_version_is_base(self):
         cursor = self.db.execute("select * from Versions where based_on_version=? and backup_id=?", (int(self.version), int(self.backup_id)))
@@ -130,8 +132,8 @@ class CozyFS(fuse.Fuse):
 
             os.mknod(self.lockfile)
 
-    def __init_base_versions(self):
-        version = int(self.version)
+    def __init_base_versions(self, version):
+        version = int(version)
         self.versions = []
         while version != None:
             self.versions.append(version)
@@ -141,48 +143,44 @@ class CozyFS(fuse.Fuse):
         self.log.debug("Backup_id: %s, Versions: %s", self.backup_id, self.versions)
 
 
+
     def close(self):
         if not self.readonly:
             os.remove(self.lockfile)
 
     def __backup_id_versions_where_statement(self, table_name):
-        return " (backup_id = " + self.backup_id + " AND (" + (table_name + ".version = ") + (" or " + table_name + ".version = ").join(map(str, self.versions)) + ") ) "
+        return " (" + table_name + ".backup_id = " + self.backup_id + " AND (" + (table_name + ".version = ") + (" or " + table_name + ".version = ").join(map(str, self.versions)) + ") ) "
 
 
     def __get_node_id_from_path(self, path):
         self.log.debug("PARAMS: path = '%s'", path)
-        if path == '/':
-            return 0
-
         if self.cached_node_ids.has_key(path):
             return self.cached_node_ids[path]
+        node_id = self.__get_node_id_from_path_from_database(path)
+        self.cached_node_ids[path] = node_id
+        return node_id
 
-        parent_node_id = 0
+    def __get_node_id_from_path_from_database(self, path):
+        parent_node_id = '0'
         built_path = '/'
         for nodename in path.split('/')[1:]:
-            new_built_path = os.path.join(built_path, nodename)
-            if self.cached_node_ids.has_key(new_built_path):
-                parent_node_id = self.cached_node_ids[os.path.join(new_built_path)]
+            built_path = os.path.join(built_path, nodename)
+            if self.cached_node_ids.has_key(built_path):
+                parent_node_id = str(self.cached_node_ids[built_path])
             else:
                 parent_node_id = "select node_id from Nodes where " + \
                                  self.__backup_id_versions_where_statement('Nodes') + \
                                  " group by node_id having nodename='" + nodename + \
-                                 "' and parent_node_id=(" + str(parent_node_id) + ") order by node_id, version desc"
-
-            built_path = new_built_path
-
-
+                                 "' and parent_node_id=(" + parent_node_id + ") order by node_id, version desc"
         query = parent_node_id
         row = self.db.execute(query).fetchone()
-
         if row is None:
-            self.cached_node_ids[path] = None
+            return None
         else:
-            self.cached_node_ids[path] = row[0]
-        return self.cached_node_ids[path]
+            return row[0]
 
 
-    def __get_inode(self, node_id):
+    def __get_inode_from_node_id(self, node_id):
         if self.cached_inodes.has_key(node_id):
             return self.cached_inodes[node_id]
 
@@ -193,34 +191,38 @@ class CozyFS(fuse.Fuse):
     def __get_attributes_from_node_id(self, node_id):
     	if self.cached_attributes.has_key(node_id):
     		return self.cached_attributes[node_id]
-        row = dict()
-        row['inode'] = self.__get_inode(node_id)
-        attributes = ['size', 'atime', 'mtime', 'ctime', 'mode', 'uid', 'gid']
-        for attribute in attributes:
-            self.log.debug('select ' + attribute + '  from ' + attribute + ' where inode=? and ' +
-                        self.__backup_id_versions_where_statement(attribute) + ' order by version desc')
-            cursor = self.db.execute('select ' + attribute + '  from ' + attribute + ' where inode=? and ' +
-                        self.__backup_id_versions_where_statement(attribute) + ' order by version desc',
-                        (row['inode'],))
-            row[attribute] = cursor.fetchone()[0]
-#            row[attribute] = self.db.select('select ' + attribute + '  from ' + attribute + ' where inode=? and ' +
-#                        self.__backup_id_versions_where_statement(attribute) + ' order by version desc',
-#                        (row['inode'],)).next()[0]
-        cursor = self.db.execute('select type  from DataPaths where inode=? and ' +
-                    self.__backup_id_versions_where_statement('DataPaths') + ' order by version desc',
-                    (row['inode'],))
-        row['type'] = cursor.fetchone()[0]
-#        row['type'] = self.db.select('select type  from DataPaths where inode=? and ' +
-#                    self.__backup_id_versions_where_statement('DataPaths') + ' order by version desc',
-#                    (row['inode'],)).next()[0]
+        attributes = self.__get_attributes_from_node_id_from_database(node_id)
+        self.cached_attributes[node_id] = attributes
+        return attributes
 
-        self.cached_attributes[node_id] = row
-        return row
+    def __get_attributes_from_node_id_from_database(self, node_id):
 
+        def comparison_string_from_attribute_and_inode(attribute):
+            return attribute + '.inode=' + str(inode)
+
+        inode = self.__get_inode_from_node_id(node_id)
+        attribute_names = ['size', 'atime', 'mtime', 'ctime', 'mode', 'uid', 'gid', 'type']
+        table_names = ['size', 'atime', 'mtime', 'ctime', 'mode', 'uid', 'gid', 'DataPaths']
+        select_string = ', '.join(attribute_names)
+        tables_string = ', '.join(table_names)
+        where_string_part1 = ' and '.join(map(comparison_string_from_attribute_and_inode, table_names))
+        where_string_part2 = ' and '.join(map(self.__backup_id_versions_where_statement, table_names))
+#        order_string
+        # CAUTION: this string can become big really fast. For 4 versions its already ~1500 chars. Must not be longer than 1000000
+        cursor = self.db.execute('select ' + select_string + ' from ' + tables_string +
+                                 ' where ' + where_string_part1 + ' and ' + where_string_part2)
+        print 'select ' + select_string + ' from ' + tables_string + \
+                                 ' where ' + where_string_part1 + ' and ' + where_string_part2
+        row = cursor.fetchone()
+        if row == None:
+            raise Exception, "Node entry without corresponding hardlink- or data-entry"
+        attributes = dict()
+        for col in attribute_names:
+            attributes[col] = row[col]
+        attributes['inode'] = inode
+        return attributes
 
     def getattr(self, path):
-#        self.log.debug("path = '%s'",path)
-        print "HERE"
         st = Stat()
         if path == '/':
             st.st_nlink = 2 # FIXME: get number of links for DB
@@ -234,8 +236,6 @@ class CozyFS(fuse.Fuse):
             return - errno.ENOENT
 
         row = self.__get_attributes_from_node_id(node_id)
-        if row == None:
-            raise Exception, "Node entry without corresponding hardlink- or data-entry"
 
         st.st_atime = int(row['atime'])
         st.st_mtime = int(row['mtime'])
@@ -484,7 +484,7 @@ class CozyFS(fuse.Fuse):
             return - errno.EROFS
 
         node_id = self.__get_node_id_from_path(path)
-        inode = self.__get_inode(node_id)
+        inode = self.__get_inode_from_node_id(node_id)
 
         if self.__has_base_nodes(node_id):
             if self.__has_current_node(node_id):
@@ -637,7 +637,7 @@ class CozyFS(fuse.Fuse):
 
 
     def __get_inode_from_path(self, path):
-    	return self.__get_inode(self.__get_node_id_from_path(path))
+    	return self.__get_inode_from_node_id(self.__get_node_id_from_path(path))
 
     def __update_attributes(self, inode, attributes):
 #        if not self.cached_attributes.has_key(inode):
