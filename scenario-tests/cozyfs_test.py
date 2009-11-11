@@ -138,12 +138,27 @@ def chown(path, uid, gid):
         actual_gid = os.stat(path)[stat.ST_GID]
         actual_uid = os.stat(path)[stat.ST_UID]
         if actual_gid != gid or actual_uid != uid:
-            raise Exception()
+            raise Exception(str(actual_gid) + '!=' + str(gid) + ' and ' + str(actual_uid) + '!=' + str(uid))
 
     except Exception, e:
-        sys.exit('### FAILED chgrp ' + path + ': ' + str(e))
+        sys.exit('### FAILED chown ' + path + ': ' + str(e))
     else:
-        print '### PASSED chgrp', path
+        print '### PASSED chown', path
+
+def readdir(path, files):
+    try:
+        actual_files = os.listdir(path)
+        for actual_file in actual_files:
+            if actual_file not in files:
+                raise Exception('file: ' + actual_file + 'should not exist')
+        for file in files:
+            if file not in actual_files:
+                raise Exception('file: ' + file + 'should exist')
+
+    except Exception, e:
+        sys.exit('### FAILED readdir ' + path + ': ' + str(e))
+    else:
+        print '### PASSED readdir', path
 
 def mkdirs(path):
     try:
@@ -271,7 +286,8 @@ def softlink(source, target):
             raise Exception('Could not access ' + target)
         if open(target).read() != open(source).read():
             raise Exception('compare failed: ' + source + ' ' + target)
-
+        if len(os.readlink(target)) != os.lstat(target).st_size:
+            raise Exception('size comparison failed: ' + str(len(os.readlink(target))) + '!=' + str(os.stat(target).st_size))
     except Exception, e:
         sys.exit('### FAILED softlink ' + source + ' ' + target + ': ' + str(e))
     else:
@@ -384,6 +400,7 @@ try:
     copy(os.path.join(DATA_DIR, 'file1'), 'file2')
     copy(os.path.join(DATA_DIR, 'file2'), './folder1_renamed/file1')
     copy(os.path.join(DATA_DIR, 'file1'), 'overwriter')
+    readdir('.', ['folder1_renamed', 'folder2', 'file2', 'overwriter'])
     umount(mountpath)
 
     version3 = snapshot(TARGET_DIR, 666, version2)

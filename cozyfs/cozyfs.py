@@ -55,6 +55,8 @@ DIFF_LIMIT = 0.5
 
 MAX_TRANSACTIONS = 100
 
+MD5SUM_FOR_EMPTY_STRING = md5sum_from_string('')
+
 import subprocess
 class xdelta3:
     @staticmethod
@@ -84,7 +86,14 @@ class Stat(fuse.Stat):
         self.st_mode = stat.S_IFDIR | 0755
 #        fuse.Stat.__init__(self)
 
+class Attribute:
+    pass
 
+class Attributes:
+    pass
+
+class StandardAttributes(Attributes):
+    pass
 
 class CozyFS(fuse.Fuse):
     def __init__(self, db, input_params, *args, **kw):
@@ -107,7 +116,10 @@ class CozyFS(fuse.Fuse):
         self.cached_node_ids = {}
         self.cached_node_ids['/'] = 0
         self.cached_inodes = dict()
+        self.cached_inodes[0] = 0
         self.cached_attributes = dict()
+        #FIXME: this needs to be initialized properly:
+        self.cached_attributes[0] = { 'size': 4096, 'atime':0, 'mtime':0, 'ctime':0, 'mode':0, 'uid':0, 'gid':0, 'type':DIRECTORY}
 
     def __init_version(self, version):
         if version is None:
@@ -190,103 +202,97 @@ class CozyFS(fuse.Fuse):
 
     def __get_attributes_from_node_id(self, node_id):
     	if self.cached_attributes.has_key(node_id):
-    		return self.cached_attributes[node_id]
+            self.log.debug(self.cached_attributes[node_id])
+            return self.cached_attributes[node_id]
         attributes = self.__get_attributes_from_node_id_from_database(node_id)
         self.cached_attributes[node_id] = attributes
+        self.log.debug(attributes)
         return attributes
 
     def __get_attributes_from_node_id_from_database(self, node_id):
 
-        def comparison_string_from_attribute_and_inode(attribute):
-            return attribute + '.inode=' + str(inode)
-
-        inode = self.__get_inode_from_node_id(node_id)
-        attribute_names = ['size', 'atime', 'mtime', 'ctime', 'mode', 'uid', 'gid', 'type']
-        table_names = ['size', 'atime', 'mtime', 'ctime', 'mode', 'uid', 'gid', 'DataPaths']
-        select_string = ', '.join(attribute_names)
-        tables_string = ', '.join(table_names)
-        where_string_part1 = ' and '.join(map(comparison_string_from_attribute_and_inode, table_names))
-        where_string_part2 = ' and '.join(map(self.__backup_id_versions_where_statement, table_names))
-#        order_string
-        # CAUTION: this string can become big really fast. For 4 versions its already ~1500 chars. Must not be longer than 1000000
-        cursor = self.db.execute('select ' + select_string + ' from ' + tables_string +
-                                 ' where ' + where_string_part1 + ' and ' + where_string_part2)
-        print 'select ' + select_string + ' from ' + tables_string + \
-                                 ' where ' + where_string_part1 + ' and ' + where_string_part2
-        row = cursor.fetchone()
-        if row == None:
-            raise Exception, "Node entry without corresponding hardlink- or data-entry"
         attributes = dict()
-        for col in attribute_names:
-            attributes[col] = row[col]
+        inode = self.__get_inode_from_node_id(node_id)
+        attribute_names = ['size', 'atime', 'mtime', 'ctime', 'mode', 'uid', 'gid']
+        for attribute in attribute_names:
+            cursor = self.db.execute('select ' + attribute + '  from ' + attribute + ' where inode=? and ' +
+                        self.__backup_id_versions_where_statement(attribute) + ' order by version',
+                        (inode,))
+            attributes[attribute] = cursor.fetchone()[0]
+        cursor = self.db.execute('select type  from DataPaths where inode=? and ' +
+                    self.__backup_id_versions_where_statement('DataPaths') + ' order by version',
+                    (inode,))
+        attributes['type'] = cursor.fetchone()[0]
         attributes['inode'] = inode
         return attributes
 
     def getattr(self, path):
-        st = Stat()
-        if path == '/':
-            st.st_nlink = 2 # FIXME: get number of links for DB
-            st.st_size = 4096
-            st.st_mode = stat.S_IFDIR | 0755
-            return st
-
         self.log.debug("path = '%s'", path)
         node_id = self.__get_node_id_from_path(path)
         if node_id == None:
             return - errno.ENOENT
+        attributes = self.__get_attributes_from_node_id(node_id)
+        return self.__stat_from_attribute(attributes)
 
-        row = self.__get_attributes_from_node_id(node_id)
-
-        st.st_atime = int(row['atime'])
-        st.st_mtime = int(row['mtime'])
-        st.st_ctime = int(row['ctime'])
-
-        if row['type'] == DIRECTORY:
-            st.st_nlink = 2
-            # FIXME: this cannot be done like this anymore with a versioned filesystem:
-            # FIXME: there is no fast way to do that now, so we comment this out.
-            # It should be solved with cached data somehow in the future
-#                    cursor = self.db.execute('select count(Nodes.nodename) from Nodes,Hardlinks,DataPaths where parent_node_id=? and Nodes.node_id=Hardlinks.node_id and Hardlinks.inode=DataPaths.inode and DataPaths.type=?', (node_id, DIRECTORY))
-#                    st.st_nlink += cursor.fetchone()[0]
-            st.st_size = 4096 # FIXME: what size should this be?
-            st.st_mode = stat.S_IFDIR | row['mode']
-        elif row["type"] == FILE:
-            st.st_nlink = 1 # FIXME: get number of links for DB
-            st.st_size = int(row['size'])
-            st.st_mode = stat.S_IFREG | row['mode']
-        elif row["type"] == DIFF:
-            st.st_nlink = 1 # FIXME: get number of links for DB
-            st.st_size = int(row['size'])
-            st.st_mode = stat.S_IFREG | row['mode']
-        elif row["type"] == SOFT_LINK:
-            st.st_nlink = 1 # FIXME: get number of links for DB
-            data_path = self.__get_data_path_from_path(path)
-# FIXME: this seems to be quite a mess with all that symlink stuff! Not sure if the current way is the correct way!
-            abs_data_path = os.path.normpath(os.path.join(os.path.dirname(path), data_path))
-            st.st_size = len(data_path)
-            attr = self.getattr(abs_data_path)
-            if isinstance(attr, int):
-                st.st_mode = stat.S_IFLNK #row['mode']
-            else:
-                st.st_mode = stat.S_IFLNK | (attr.st_mode & ~stat.S_IFDIR)#row['mode']
-        else:
-            raise Exception, "Error: unknown file type \"" + str(row["type"]) + "\" in database."
-        st.st_uid = row["uid"]
-        st.st_gid = row["gid"]
-        self.log.debug("RETURN %s", str(st))
+    def __stat_from_attribute(self, attributes):
+        st = Stat()
+        self.__store_common_attributes_into_stat(attributes, st)
+        self.__store_file_type_specific_attributes_into_stat(attributes, st)
         return st
+
+    def __store_common_attributes_into_stat(self, attributes, st):
+        st.st_atime = int(attributes['atime'])
+        st.st_mtime = int(attributes['mtime'])
+        st.st_ctime = int(attributes['ctime'])
+        st.st_uid = attributes["uid"]
+        st.st_gid = attributes["gid"]
+
+    def __store_file_type_specific_attributes_into_stat(self, attributes, st):
+        if attributes['type'] == DIRECTORY:
+            self.__store_dir_specific_attributes_into_stat(attributes, st)
+        elif attributes["type"] == FILE or attributes["type"] == DIFF:
+            self.__store_file_specific_attributes_into_stat(attributes, st)
+        elif attributes["type"] == SOFT_LINK:
+            self.__store_symlink_specific_attributes_into_stat(attributes, st)
+        else:
+            raise Exception, "Error: unknown file type \"" + str(attributes["type"]) + "\" in database."
+
+    def __store_dir_specific_attributes_into_stat(self, attributes, st):
+        st.st_nlink = 2 # FIXME: get number of links from DB
+        st.st_size = 4096 # FIXME: what size should this be?
+        st.st_mode = stat.S_IFDIR | attributes['mode']
+
+    def __store_file_specific_attributes_into_stat(self, attributes, st):
+        st.st_nlink = 1 # FIXME: get number of links from DB
+        st.st_size = int(attributes['size'])
+        st.st_mode = stat.S_IFREG | attributes['mode']
+
+    def __store_symlink_specific_attributes_into_stat(self, attributes, st):
+        st.st_nlink = 1 # FIXME: get number of links from DB
+# FIXME: this seems to be quite a mess with all that symlink stuff! Not sure if the current way is the correct way!
+#        data_path = self.__get_data_path_from_path(path)
+#        abs_data_path = os.path.normpath(os.path.join(os.path.dirname(path), data_path))
+#        st.st_size = len(data_path)
+        st.st_size = int(attributes['size'])
+#        attr = self.getattr(abs_data_path)
+        attr = 1
+        if isinstance(attr, int):
+            st.st_mode = stat.S_IFLNK #attributes['mode']
+        else:
+            st.st_mode = stat.S_IFLNK | (attr.st_mode & ~stat.S_IFDIR)#attributes['mode']
+
+
 
     def readdir(self, path, offset):
         self.log.debug("PARAMS: path = '%s, offset = '%s'", path, offset)
-        entries = ['.', '..']
         node_id = self.__get_node_id_from_path(path)
         cursor = self.db.execute("select nodename from Nodes where " + self.__backup_id_versions_where_statement('Nodes') + " group by node_id having parent_node_id=? order by node_id, version desc", (node_id,))
+        yield fuse.Direntry('.')
+        yield fuse.Direntry('..')
         for c in cursor:
             if c[0] != None:
                 self.log.debug(c[0])
-                entries.append(c[0])
-        for entry in entries:
-            yield fuse.Direntry(entry)
+                yield fuse.Direntry(c[0])
 
     def __get_new_inode(self):
         ret = self.db.execute('select max(inode) from Hardlinks').fetchone()
@@ -301,22 +307,17 @@ class CozyFS(fuse.Fuse):
             self.log.error("Can't write to FS in a restore session")
             return - errno.EROFS
 
-        pe = path.rsplit('/', 1)
-        if pe[0] == '': # FIXME: there must be a more elegant solution
-            pe[0] = '/'
+        path_head, path_tail = os.path.split(path)
 
         new_inode = self.__get_new_inode()
         if type == FILE:
-            hash = md5sum_from_string('') # TODO: this could acutally be done only once.
+            hash = MD5SUM_FOR_EMPTY_STRING
+        elif type == DIRECTORY:
+            hash = None
         ctime = time.time()
 
-        if type == DIRECTORY:
-            self.db.execute('insert into DataPaths (backup_id,version,inode,type) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, DIRECTORY))
-        elif type == FILE:
-            self.db.execute('insert into DataPaths (backup_id,version,inode, data_path,type) values(?,?,?,?,?)', (self.backup_id, self.versions[0], new_inode, hash, FILE))
-        else:
-            return - errno.EIO
-        print 'FIRST INSERT GESCCHAFT'
+        self.db.execute('insert into DataPaths (backup_id,version,inode, data_path, type) values(?,?,?,?,?)', (self.backup_id, self.versions[0], new_inode, hash, type))
+
         self.db.execute('insert into uid (backup_id,version,inode, uid) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, self.GetContext()['uid']))
         self.db.execute('insert into gid (backup_id,version,inode, gid) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, self.GetContext()['gid']))
         self.db.execute('insert into mode (backup_id,version,inode, mode) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, mode))
@@ -341,8 +342,8 @@ class CozyFS(fuse.Fuse):
                                              'size': 0 }
 
         query = 'insert into Nodes (backup_id,version,node_id,nodename,parent_node_id) values (?,?,?,?,?)'
-        self.log.debug(query2log(query), self.backup_id, self.versions[0], new_node_id, pe[1], self.__get_node_id_from_path(pe[0]))
-        self.db.execute(query, (self.backup_id, self.versions[0], new_node_id, pe[1], self.__get_node_id_from_path(pe[0])))
+        self.log.debug(query2log(query), self.backup_id, self.versions[0], new_node_id, path_tail, self.__get_node_id_from_path(path_head))
+        self.db.execute(query, (self.backup_id, self.versions[0], new_node_id, path_tail, self.__get_node_id_from_path(path_head)))
 
         if type == FILE:
             # although creating an empty file is not necessary it simplifies the open function later, since we have no special case
@@ -423,7 +424,7 @@ class CozyFS(fuse.Fuse):
         self.db.execute('insert into atime (backup_id,version,inode, atime) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, ctime))
         self.db.execute('insert into ctime (backup_id,version,inode, ctime) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, ctime))
         self.db.execute('insert into mtime (backup_id,version,inode, mtime) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, ctime))
-        self.db.execute('insert into size (backup_id,version,inode, size) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, 0))
+        self.db.execute('insert into size (backup_id,version,inode, size) values(?,?,?,?)', (self.backup_id, self.versions[0], new_inode, len(src_path)))
 
         query = 'insert into Hardlinks (node_id, inode) values (null,?)'
         self.log.debug(query2log(query), new_inode)
@@ -438,7 +439,7 @@ class CozyFS(fuse.Fuse):
                                              'atime': ctime,
                                              'ctime': ctime,
                                              'mtime': ctime,
-                                             'size': 0 }
+                                             'size': len(src_path) }
 
         self.cached_inodes[new_node_id] = new_inode
         self.cached_node_ids[target_path] = new_node_id
