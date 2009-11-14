@@ -156,7 +156,7 @@ class AttributesRepository(object):
         self.db.execute(query, (value, inode, self.backup_id, self.versions[0]))
 
     def __get_new_inode(self):
-        ret = self.db.execute('select max(inode) from Hardlinks').fetchone()
+        ret = self.db.execute('select max(inode_number) from Nodes').fetchone()
         if ret[0] == None:
             return 1
         else:
@@ -329,7 +329,11 @@ class CozyFS(fuse.Fuse):
         if self.cached_inodes.has_key(node_id):
             return self.cached_inodes[node_id]
 
-        inode = self.db.execute('SELECT inode FROM Hardlinks WHERE node_id=?', (node_id,)).fetchone()[0]
+        query = "select inode_number from Nodes where " + \
+                         self.__backup_id_versions_where_statement('Nodes') + \
+                         " AND node_id=?"
+
+        inode = self.db.execute(query, (node_id,)).fetchone()[0]
         self.cached_inodes[node_id] = inode
         return inode
 
@@ -468,20 +472,24 @@ class CozyFS(fuse.Fuse):
                                        data_path=hash)
         self.attributes_repository.insert(file_attributes)
 
-        query = 'insert into Hardlinks (node_id, inode) values (null,?)'
-        self.log.debug(query2log(query), file_attributes.inode)
-        cursor = self.db.execute(query, (file_attributes.inode,))
-        new_node_id = cursor.lastrowid
-        self.cached_inodes[new_node_id] = file_attributes.inode
+        new_node_id = self.__get_new_node_id()
 
         path_head, path_tail = os.path.split(path)
-        query = 'insert into Nodes (backup_id,version,node_id,nodename,parent_node_id) values (?,?,?,?,?)'
-        self.log.debug(query2log(query), self.backup_id, self.versions[0], new_node_id, path_tail, self.__get_node_id_from_path(path_head))
-        self.db.execute(query, (self.backup_id, self.versions[0], new_node_id, path_tail, self.__get_node_id_from_path(path_head)))
+        query = 'insert into Nodes (backup_id,version,nodename,node_id,parent_node_id, inode_number) values (?,?,?,?,?,?)'
+        self.log.debug(query2log(query), self.backup_id, self.versions[0], path_tail, new_node_id, self.__get_node_id_from_path(path_head), file_attributes.inode)
+        self.db.execute(query, (self.backup_id, self.versions[0], path_tail, new_node_id, self.__get_node_id_from_path(path_head), file_attributes.inode))
 
+        self.cached_inodes[new_node_id] = file_attributes.inode
         self.cached_node_ids[path] = new_node_id
         self.db.commit()
         return 0
+
+    def __get_new_node_id(self):
+        ret = self.db.execute('select max(node_id) from Nodes').fetchone()
+        if ret[0] == None:
+            return 1
+        else:
+            return ret[0] + 1
 
     def mknod(self, path, mode, dev): #TODO: if file already exists, only change file time. DO NOT empty file!
         self.log.debug("PARAMS: path = '%s, mode = %s, dev = %s", path, mode, dev)
@@ -516,14 +524,13 @@ class CozyFS(fuse.Fuse):
         self.log.debug("PARAMS: src_path = '%s', target_path = '%s'", src_path, target_path)
         self.__assert_readwrite()
 
-        pe = target_path.rsplit('/', 1)
+        dirname, basename = os.path.split(target_path)
         inode = self.__get_inode_from_path(src_path)
-        cursor = self.db.execute("insert into Hardlinks (node_id,inode) values (null,?)", (inode,))
-        new_node_id = cursor.lastrowid
+        new_node_id = self.__get_new_node_id()
+        self.db.execute("insert into Nodes (backup_id, version, node_id, parent_node_id, nodename, inode_number) values (?,?,?,?,?,?)", \
+                        (self.backup_id, self.versions[0], new_node_id, self.__get_node_id_from_path(dirname), basename, inode))
         self.cached_inodes[new_node_id] = inode
         self.cached_node_ids[target_path] = new_node_id
-        self.db.execute("insert into Nodes (backup_id, version, node_id, parent_node_id, nodename) values (?,?,?,?,?)", \
-                        (self.backup_id, self.versions[0], new_node_id, self.__get_node_id_from_path(pe[0]), pe[1]))
         self.db.commit()
 
 
@@ -545,20 +552,13 @@ class CozyFS(fuse.Fuse):
         self.attributes_repository.insert(file_attributes)
         new_inode = file_attributes.inode
 
-        query = 'insert into Hardlinks (node_id, inode) values (null,?)'
-        self.log.debug(query2log(query), new_inode)
-        cursor = self.db.execute(query, (new_inode,))
-        new_node_id = cursor.lastrowid
-
-#        del self.cached_inodes[new_node_id]
-
+        (dirname, basename) = os.path.split(target_path)
+        new_node_id = self.__get_new_node_id()
+        query = 'insert into Nodes (backup_id,version,nodename,parent_node_id, inode_number, node_id) values (?,?,?,?,?,?)'
+        self.log.debug(query2log(query), self.backup_id, self.versions[0], basename, self.__get_node_id_from_path(dirname), new_inode, new_node_id)
+        self.db.execute(query, (self.backup_id, self.versions[0], basename, self.__get_node_id_from_path(dirname), new_inode, new_node_id))
         self.cached_inodes[new_node_id] = new_inode
         self.cached_node_ids[target_path] = new_node_id
-
-        (dirname, basename) = os.path.split(target_path)
-        query = 'insert into Nodes (backup_id,version,node_id,nodename,parent_node_id) values (?,?,?,?,?)'
-        self.log.debug(query2log(query), self.backup_id, self.versions[0], new_node_id, basename, self.__get_node_id_from_path(dirname))
-        self.db.execute(query, (self.backup_id, self.versions[0], new_node_id, basename, self.__get_node_id_from_path(dirname)))
 
         self.db.commit()
         return 0
@@ -609,9 +609,7 @@ class CozyFS(fuse.Fuse):
             cursor = self.db.execute("select count(node_id) from Nodes where node_id=?", (node_id,))
             row = cursor.fetchone()
             if row[0] == 0:
-                self.db.execute("delete from Hardlinks where node_id=?", (node_id,))
-
-                cursor = self.db.execute("select count(inode) from Hardlinks where inode=?", (inode,))
+                cursor = self.db.execute("select count(inode_number) from Nodes where inode_number=?", (inode,))
                 row = cursor.fetchone()
                 if row[0] == 0:
                     self.db.execute("delete from data_path where inode=?", (inode,))
