@@ -53,7 +53,8 @@ db.text_factory = str
 
 db.executescript("""
 CREATE TABLE IF NOT EXISTS Versions (backup_id NUMERIC, version NUMERIC, based_on_version NUMERIC);
-CREATE TABLE IF NOT EXISTS DataPaths (backup_id NUMERIC, version NUMERIC, type NUMERIC, data_path TEXT, inode NUMERIC);
+CREATE TABLE IF NOT EXISTS data_path (backup_id NUMERIC, version NUMERIC, data_path TEXT, inode NUMERIC);
+CREATE TABLE IF NOT EXISTS type (backup_id NUMERIC, version NUMERIC, type NUMERIC, inode NUMERIC);
 CREATE TABLE IF NOT EXISTS Hardlinks (node_id INTEGER PRIMARY KEY, inode NUMERIC);
 CREATE TABLE IF NOT EXISTS Nodes (backup_id NUMERIC, version NUMERIC, nodename TEXT, parent_node_id NUMERIC, node_id NUMERIC);
 CREATE TABLE IF NOT EXISTS atime (atime NUMERIC, version NUMERIC, backup_id NUMERIC, inode NUMERIC);
@@ -71,9 +72,10 @@ if db.execute('SELECT count(*) FROM Versions WHERE backup_id=?', (backup_id,)).f
     print 'Specified backup_id already exists in this filesystem. To overwrite this, use force'
 elif force:
     db.execute('DELETE FROM Hardlinks WHERE node_id in (SELECT node_id FROM Nodes WHERE backup_id=?)', (backup_id,))
-    db.execute('DELETE FROM DataPaths WHERE backup_id = ?', (backup_id,))
+    db.execute('DELETE FROM data_path WHERE backup_id = ?', (backup_id,))
     db.execute('DELETE FROM Nodes WHERE backup_id = ?', (backup_id,))
     db.execute('DELETE FROM Versions WHERE backup_id = ?', (backup_id,))
+    db.execute('DELETE FROM type WHERE backup_id = ?', (backup_id,))
     db.execute('DELETE FROM atime WHERE backup_id = ?', (backup_id,))
     db.execute('DELETE FROM ctime WHERE backup_id = ?', (backup_id,))
     db.execute('DELETE FROM gid WHERE backup_id = ?', (backup_id,))
