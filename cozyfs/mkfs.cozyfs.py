@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS mode (backup_id NUMERIC, version NUMERIC, inode NUMER
 CREATE TABLE IF NOT EXISTS mtime (backup_id NUMERIC, version NUMERIC, inode NUMERIC, mtime NUMERIC);
 CREATE TABLE IF NOT EXISTS size (backup_id NUMERIC, version NUMERIC, inode NUMERIC, size NUMERIC);
 CREATE TABLE IF NOT EXISTS uid (backup_id NUMERIC, version NUMERIC, inode NUMERIC, uid NUMERIC);
+CREATE TABLE IF NOT EXISTS FileDiffDependencies (data_path TEXT, based_on_data_path TEXT);
 """)
 
 
@@ -81,6 +82,7 @@ elif force:
     db.execute('DELETE FROM mode WHERE backup_id = ?', (backup_id,))
     db.execute('DELETE FROM mtime WHERE backup_id = ?', (backup_id,))
     db.execute('DELETE FROM size WHERE backup_id = ?', (backup_id,))
+    db.execute('DELETE FROM FileDiffDepencies', (backup_id,))
 
 version = int(time.time())
 

@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+from __future__ import with_statement
 import sys
 import os
 import shutil
@@ -28,6 +29,8 @@ TARGET_DIR = tempfile.mkdtemp(prefix='cozy-' + loginname)
 
 SUCCESSFUL_MOUNT_TIMEOUT = 2
 
+os.environ['COVERAGE_FILE'] = os.path.join(TC_DIR, 'coveragedata')
+
 
 def make_cozyfs(target_dir, backup_id):
     if not os.path.exists(TARGET_DIR):
@@ -50,6 +53,7 @@ def make_cozyfs(target_dir, backup_id):
 def mount(device_dir, mount_point, backup_id, version=None, as_readonly=False):
     os.mkdir(mount_point)
     try:
+        subprocess.call(['python-coverage', '-e'])
         cmdline = __build_cmdline(device_dir, mount_point, backup_id, version, as_readonly)
         print '### MOUNTING: ' + ' '.join(cmdline)
         process = subprocess.Popen(cmdline)
@@ -62,6 +66,8 @@ def mount(device_dir, mount_point, backup_id, version=None, as_readonly=False):
 
 
 def __build_cmdline(device_dir, mount_point, backup_id, version, as_readonly):
+#    cmdline = ['coverage', '-x', COZYFS_PATH, device_dir, mount_point, '-b', str(backup_id)]
+#    cmdline = ['python', '-m', 'trace', '--count', '-C', '/home/peter/Projects/Cozy/scenario-tests/coverage-report', COZYFS_PATH, device_dir, mount_point, '-b', str(backup_id)]
     cmdline = [COZYFS_PATH, device_dir, mount_point, '-b', str(backup_id)]
     if version is not None:
         cmdline.append('-v')
@@ -264,6 +270,29 @@ def copy(source, target):
     else:
         print '### PASSED copy', source, target
 
+def add_string_to_file(filename, string):
+    try:
+        with open(filename, 'r') as fh:
+            orig_content = fh.read()
+
+#        with open(filename, 'r+') as fh:
+#            fh.write(string)
+
+        with open(filename, 'w') as fh:
+            fh.write(orig_content + string)
+
+        with open(filename, 'r') as fh:
+            new_content = fh.read()
+
+        if new_content != orig_content + string:
+            raise Exception('Adding string to file failed:\n expected: %s\nactual: %s' %
+                            (orig_content + string, new_content))
+
+    except Exception, e:
+        sys.exit('### FAILED add string to file ' + filename + ': ' + str(e))
+    else:
+        print '### PASSED add string to file', filename
+
 def hardlink(source, target):
     try:
         os.link(source, target)
@@ -321,7 +350,7 @@ def check_tmp_dir():
     files = os.listdir(TARGET_DIR + '/Tmp')
 #    files.remove('.svn')
     if len(files) > 0:
-        sys.exit('### WARNING tmp dir is not empty')
+        sys.exit('### WARNING tmp dir is not empty\n' + '\n'.join(files))
 
 
 def clean_db():
@@ -406,6 +435,7 @@ try:
     version3 = snapshot(TARGET_DIR, 666, version2)
 
     mount(TARGET_DIR, mountpath, 666, version3)
+    add_string_to_file('overwriter', 'THIS IS THE MODIFICATION')
     copy(os.path.join(DATA_DIR, 'file1'), 'overwriter')
 #    raw_input()
     mkdir('folder4')
@@ -423,6 +453,7 @@ try:
     version4 = snapshot(TARGET_DIR, 666, version3)
 
     mount(TARGET_DIR, mountpath, backup_id=666, version=version4)
+    add_string_to_file('overwriter', 'AND THIS IS NUMBER 2')
     compare_file_content(os.path.join(DATA_DIR, 'image1.jpg'), 'folder4/hardlink_to_image.jpg')
     compare_file_content('softlink_to_image.jpg', 'folder4/hardlink_to_image.jpg')
     umount(mountpath)
