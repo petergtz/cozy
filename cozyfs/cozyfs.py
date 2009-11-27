@@ -156,7 +156,7 @@ class InodesRepository(object):
 
     def previous_data_path_version_of_inode(self, inode):
         return self.storage.db_execute("select data_path from data_path where inode = ? and version <> ? and " + self.__backup_id_versions_where_statement('data_path') + " order by version desc",
-                               (inode.inode_number, self.backup_id)).fetchone()[0]
+                               (inode.inode_number, self.versions[0])).fetchone()[0]
 
     def __inode_from_inode_number_from_database(self, inode_number):
         inode = Inode(inode_number=inode_number)
@@ -316,35 +316,35 @@ class DataPathDepChain(object):
         return len(self.data_path_dep_chain) != 1
 
     def apply_patches_and_save_as(self, target_path):
- #       self.log.debug(target_path)
         reverse_data_path_dep_chain = self.data_path_dep_chain[:]
         reverse_data_path_dep_chain.reverse()
 
         real_base_path = self.storage.real_path('perm/' + reverse_data_path_dep_chain[0])
 
         if self.__dep_chain_includes_more_than_1_diff(reverse_data_path_dep_chain):
-            real_merged_diff_path = self.__merge_diffs(reverse_data_path_dep_chain, target_path)
+            merged_diff_path = self.__merge_diffs(reverse_data_path_dep_chain, target_path)
+            real_merged_diff_path = self.storage.real_path(merged_diff_path)
+            cmdline = ['xdelta3', '-f', '-d', '-s', real_base_path, real_merged_diff_path, self.storage.real_path(target_path)]
+            xdelta3.xd3_main_cmdline(cmdline)
+            self.storage.remove_file(merged_diff_path)
         elif len(reverse_data_path_dep_chain) == 2:
             real_merged_diff_path = self.storage.real_path('perm/' + reverse_data_path_dep_chain[1])
-
-        cmdline = ['xdelta3', '-f', '-d', '-s', real_base_path, real_merged_diff_path, self.storage.real_path(target_path)]
-#        self.log.debug(' '.join(cmdline))
-        xdelta3.xd3_main_cmdline(cmdline)
+            cmdline = ['xdelta3', '-f', '-d', '-s', real_base_path, real_merged_diff_path, self.storage.real_path(target_path)]
+            xdelta3.xd3_main_cmdline(cmdline)
 
     def __dep_chain_includes_more_than_1_diff(self, reverse_data_path_dep_chain):
         return len(reverse_data_path_dep_chain) > 2
 
     def __merge_diffs(self, reverse_data_path_dep_chain, target_path):
-        diff_merge_cmdline = ['xdelta3', ' merge']
+        diff_merge_cmdline = ['xdelta3', 'merge']
         for diff_path in reverse_data_path_dep_chain[1:-1]:
             real_diff_path = self.storage.real_path('perm/' + diff_path)
-            diff_merge_cmdline.extend(['m', real_diff_path])
+            diff_merge_cmdline.extend(['-m', real_diff_path])
         real_final_diff_path = self.storage.real_path('perm/' + reverse_data_path_dep_chain[-1])
-        real_merged_diff_path = self.storage.real_path('tmp/' + target_path + 'merged_diff' + self.time_string())
-        diff_merge_cmdline.extend([real_final_diff_path, real_merged_diff_path])
-#        self.log.debug(' '.join(diff_merge_cmdline))
+        merged_diff_path = 'tmp/' + target_path + 'merged_diff' + time_string()
+        diff_merge_cmdline.extend([real_final_diff_path, self.storage.real_path(merged_diff_path)])
         xdelta3.xd3_main_cmdline(diff_merge_cmdline)
-        return real_merged_diff_path
+        return merged_diff_path
 
 def time_string():
     return 'TIME_STAMP_' + str(time.time())
@@ -462,7 +462,7 @@ class PatchedFileContentStrategy(object):
             self.original_filename = 'tmp/%s.orig.%s' % (data_path_of_previous_version, time_string())
             self.previous_version_dep_chain.apply_patches_and_save_as(self.original_filename)
         else:
-            self.original_filename = 'perm/' + data_path
+            self.original_filename = 'perm/' + data_path_of_previous_version
 
 
     def flush(self, new_data_path, filename):
@@ -487,7 +487,7 @@ class PatchedFileContentStrategy(object):
                 self.filediff_deps.insert(new_data_path, None)
             else:
                 self.storage.move_file(diff_filename, 'perm/' + new_data_path)
-                self.filediff_deps.insert(new_data_path, self.data_path)
+                self.filediff_deps.insert(new_data_path, self.previous_version_dep_chain.data_path_dep_chain[0])
 
     def __create_diff(self, original, new, diff):
         original = self.storage.real_path(original)
@@ -852,12 +852,12 @@ class CozyFS(fuse.Fuse):
 
 
     def read(self, path, length, offset, fH):
-        self.log.debug("PARAMS: path = '%s', len = %s, offset = %s, fH = %s", path, length, offset, fH)
+#        self.log.debug("PARAMS: path = '%s', len = %s, offset = %s, fH = %s", path, length, offset, fH)
         buf = fH.read(length, offset)
         return buf
 
     def write(self, path, buf, offset, fH):
-        self.log.debug("PARAMS: path = '%s', buf = %s, offset = %s, fH = %s", path, "buffer placeholder", offset, fH)
+#        self.log.debug("PARAMS: path = '%s', buf = %s, offset = %s, fH = %s", path, "buffer placeholder", offset, fH)
         fH.write(buf, offset)
         return len(buf)
 
@@ -889,56 +889,21 @@ class CozyFS(fuse.Fuse):
     def release(self, path, flags, fH):
         self.log.debug("PARAMS: path = '%s, flags = %s, fH = %s'", path, flags, fH)
         fH.close()
-        ctime = time.time()
-        node = self.nodes.node_from_path(path)
-        inode = self.inodes.inode_from_inode_number(node.inode_number)
 
         self.storage.commit()
         return 0
 
 
-
-# TODO: this function should also use diffs!!!
     def truncate(self, path, length, fh=None):
         self.log.debug("PARAMS: path = '%s', length = %s, fH = %s", path, length, fh)
         assert fh is None, "Assumption that fh is always None is wrong"
         self.__assert_readwrite()
 
-#        node = self.nodes.node_from_path(path)
-#        inode = self.inodes.inode_from_inode_number(node.inode_number)
-#        file_handle = OpenFileInReadWriteMode(self.storage, inode['data_path'], 'readwrite')
         file_handle = self.open(path, os.O_RDWR)
         # FIXME: this is a dirty hack:
         file_handle.file_handle.truncate(length)
         self.flush(path, file_handle)
         self.release(path, 0, file_handle)
-
-#        old_data_path = inode['data_path']
-#        ctime = time.time()
-#
-#        # Copy file to the tmp dir and truncate it:
-#        tmp_path = self.device_dir + '/Tmp/' + path.replace('/', '_')
-#        self.log.debug('Copy file %s to %s.', self.device_dir + '/FilePool/' + old_data_path, tmp_path)
-#        shutil.copy(self.device_dir + '/FilePool/' + old_data_path, tmp_path)
-#        try:
-#            self.log.debug('Open, truncate and close file %s in r+ mode.', tmp_path)
-#            fh = open(tmp_path, 'r+')
-#            fh.truncate(length)
-#            fh.close()
-#        except:
-#            self.logerror('Cannot truncate temporary file %s', tmp_path)
-#
-#        # Calculate new data path=hash and move it back to the file pool:
-#        new_data_path = md5sum(tmp_path)
-#        self.log.debug('Move file %s to %s.', tmp_path, self.device_dir + '/FilePool/' + new_data_path)
-#        shutil.move(tmp_path, self.device_dir + '/FilePool/' + new_data_path)
-#
-#        self.inodes.update_inode_in_place(node.inode_number, {'data_path': new_data_path, 'type': FILE, 'size': length, 'atime': ctime, 'ctime':ctime, 'mtime':ctime})
-#
-#        if self.inodes.data_path_not_used_anymore(old_data_path):
-#            os.remove(self.device_dir + '/FilePool/' + old_data_path)
-
-        self.storage.commit()
         return 0
 
 
