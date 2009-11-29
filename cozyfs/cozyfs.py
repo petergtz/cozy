@@ -37,7 +37,7 @@ import logging
 
 import time
 
-import cProfile
+# import cProfile
 
 import optparse
 import traceback
@@ -46,8 +46,6 @@ DBFILE = "fsdb"
 
 FILE = 1
 SOFT_LINK = 2
-HARD_LINK = 3
-DIFF = 4
 DIRECTORY = 5
 
 DIFF_LIMIT = 0.5
@@ -97,7 +95,6 @@ class Stat(fuse.Stat):
         self.st_blocks = 1
         self.st_blksize = 4096
         self.st_rdev = 0
-#        self.direct_io = 1
         self.st_nlink = 2 # FIXME: get number of links for DB
         self.st_size = 4096
         self.st_mode = stat.S_IFDIR | 0755
@@ -151,7 +148,6 @@ class InodesRepository(object):
         if not self.cached_inodes.has_key(inode_number):
             inode = self.__inode_from_inode_number_from_database(inode_number)
             self.cached_inodes[inode_number] = inode
-#        self.log.debug(self.cached_inodes[inode_number])
         return self.cached_inodes[inode_number]
 
     def previous_data_path_version_of_inode(self, inode):
@@ -241,11 +237,9 @@ class NodesRepository(object):
             return ret[0] + 1
 
     def node_from_path(self, path):
-#        self.log.debug("PARAMS: path = '%s'", path)
         if not self.cached_nodes.has_key(path):
             node = self.__node_from_path_from_database(path)
             self.cached_nodes[path] = node
-#        self.log.debug("Returning: " + str(self.cached_nodes[path]))
         return self.cached_nodes[path]
 
     def __node_from_path_from_database(self, path):
@@ -353,7 +347,7 @@ def time_string():
 class OpenFileInReadMode(object):
     def __init__(self, storage, data_path):
         self.storage = storage
-        self.direct_io = True  # since I don't know how direct_io works, I'm disbling it.
+        self.direct_io = True  # since I don't know how direct_io works, I'm enabling it.
         self.keep_cache = True # unfortunately it's nowhere documented in FUSE
         data_path_dep_chain = DataPathDepChain(storage, data_path)
         if data_path_dep_chain.data_path_is_diff():
@@ -408,9 +402,10 @@ class OpenFileInReadWriteMode(object):
     def flush(self):
         self.file_handle.flush()
         new_data_path = md5sum(self.storage.real_path(self.filename))
+        new_size = self.storage.file_size_of(self.filename)
         if new_data_path != self.data_path:
             self.file_content_strategy.flush(new_data_path, self.filename)
-        return new_data_path
+        return new_data_path, new_size
 
     def close(self):
         self.file_handle.close()
@@ -466,28 +461,29 @@ class PatchedFileContentStrategy(object):
 
 
     def flush(self, new_data_path, filename):
-        diff_filename = 'tmp/%s.diff.%s' % (new_data_path, time_string())
-        self.__create_diff(self.original_filename, filename, diff_filename)
-        size_of_diff = self.storage.file_size_of(diff_filename)
-        if self.filediff_deps.data_path_exists_already(new_data_path):
-            size_of_existing_diff = self.storage.file_size_of('perm/' + new_data_path)
-            if size_of_diff < size_of_existing_diff:
-                self.storage.move_file(diff_filename, 'perm/' + new_data_path)
-                self.filediff_deps.update(new_data_path, self.data_path)
-                # FIXME:
-                # if old based_on_data_path in FileDiffDeps not needed anymore,
-                #     delete it.
+        if self.previous_version_dep_chain.data_path_dep_chain[0] != new_data_path:
+            diff_filename = 'tmp/%s.diff.%s' % (new_data_path, time_string())
+            self.__create_diff(self.original_filename, filename, diff_filename)
+            size_of_diff = self.storage.file_size_of(diff_filename)
+            if self.filediff_deps.data_path_exists_already(new_data_path):
+                size_of_existing_diff = self.storage.file_size_of('perm/' + new_data_path)
+                if size_of_diff < size_of_existing_diff:
+                    self.storage.move_file(diff_filename, 'perm/' + new_data_path)
+                    self.filediff_deps.update(new_data_path, self.data_path)
+                    # FIXME:
+                    # if old based_on_data_path in FileDiffDeps not needed anymore,
+                    #     delete it.
+                else:
+                    self.storage.remove_file(diff_filename)
             else:
-                self.storage.remove_file(diff_filename)
-        else:
-            size_of_nondiff = self.storage.file_size_of(filename)
-            if self.__size_of_diff_is_too_big(size_of_diff, size_of_nondiff):
-                self.storage.copy_file(filename, 'perm/' + new_data_path)
-                self.storage.remove_file(diff_filename)
-                self.filediff_deps.insert(new_data_path, None)
-            else:
-                self.storage.move_file(diff_filename, 'perm/' + new_data_path)
-                self.filediff_deps.insert(new_data_path, self.previous_version_dep_chain.data_path_dep_chain[0])
+                size_of_nondiff = self.storage.file_size_of(filename)
+                if self.__size_of_diff_is_too_big(size_of_diff, size_of_nondiff):
+                    self.storage.copy_file(filename, 'perm/' + new_data_path)
+                    self.storage.remove_file(diff_filename)
+                    self.filediff_deps.insert(new_data_path, None)
+                else:
+                    self.storage.move_file(diff_filename, 'perm/' + new_data_path)
+                    self.filediff_deps.insert(new_data_path, self.previous_version_dep_chain.data_path_dep_chain[0])
 
     def __create_diff(self, original, new, diff):
         original = self.storage.real_path(original)
@@ -561,7 +557,7 @@ class ConsistenceStorage(object):
 class CozyFS(fuse.Fuse):
     def __init__(self, storage, input_params, *args, **kw):
         fuse.Fuse.__init__(self, *args, **kw)
-        self.multithreaded = False # CHECKME: is this really necessary
+        self.multithreaded = False # we don't want file functions to be called in paralell
         self.log = logging.getLogger('cozyfs')
         self.storage = storage
         self.readonly = input_params.readonly
@@ -644,7 +640,7 @@ class CozyFS(fuse.Fuse):
     def __store_file_type_specific_attributes_into_stat(self, attributes, st):
         if attributes['type'] == DIRECTORY:
             self.__store_dir_specific_attributes_into_stat(attributes, st)
-        elif attributes["type"] == FILE or attributes["type"] == DIFF:
+        elif attributes["type"] == FILE:
             self.__store_file_specific_attributes_into_stat(attributes, st)
         elif attributes["type"] == SOFT_LINK:
             self.__store_symlink_specific_attributes_into_stat(attributes, st)
@@ -819,7 +815,7 @@ class CozyFS(fuse.Fuse):
         self.log.debug("PARAMS: path = '%s'", path)
         self.__assert_readwrite()
 
-        for node in self.readdir(path, 0): # 2nd param is offset. don't know how to use it
+        for node in self.readdir(path, 0):
             if (node.name != '.') and (node.name != '..'): # TODO: must be a more elegant solutions
                 if self.unlink(path + '/' + node.name) != 0:
                     return - 1 # TODO: return proper return value!
@@ -828,7 +824,6 @@ class CozyFS(fuse.Fuse):
 
     def open(self, path, flags):
         self.log.debug("PARAMS: path = '%s', flags = %s", path, flags2string(flags))
-#        target_path = self.device_dir + '/Tmp/' + path.replace('/', '_')
         node = self.nodes.node_from_path(path)
         inode = self.inodes.inode_from_inode_number(node.inode_number)
         if flags & os.O_WRONLY or flags & os.O_RDWR:
@@ -852,12 +847,10 @@ class CozyFS(fuse.Fuse):
 
 
     def read(self, path, length, offset, fH):
-#        self.log.debug("PARAMS: path = '%s', len = %s, offset = %s, fH = %s", path, length, offset, fH)
         buf = fH.read(length, offset)
         return buf
 
     def write(self, path, buf, offset, fH):
-#        self.log.debug("PARAMS: path = '%s', buf = %s, offset = %s, fH = %s", path, "buffer placeholder", offset, fH)
         fH.write(buf, offset)
         return len(buf)
 
@@ -868,9 +861,9 @@ class CozyFS(fuse.Fuse):
                 node = self.nodes.node_from_path(path)
                 inode = self.inodes.inode_from_inode_number(node.inode_number)
                 old_data_path = inode['data_path']
-                new_data_path = fh.flush()
+                new_data_path, new_size = fh.flush()
                 if old_data_path != new_data_path:
-                    self.inodes.update_inode_in_place(node.inode_number, {'data_path': new_data_path})
+                    self.inodes.update_inode_in_place(node.inode_number, {'data_path': new_data_path, 'size': new_size})
 
                     if self.inodes.data_path_not_used_anymore(old_data_path) and \
                         self.__data_path_not_used_in_filediff_deps_anymore(old_data_path):
@@ -899,8 +892,8 @@ class CozyFS(fuse.Fuse):
         assert fh is None, "Assumption that fh is always None is wrong"
         self.__assert_readwrite()
 
+        # FIXME: not sure if implementing truncate through open, write, flush release sequence is good. 
         file_handle = self.open(path, os.O_RDWR)
-        # FIXME: this is a dirty hack:
         file_handle.file_handle.truncate(length)
         self.flush(path, file_handle)
         self.release(path, 0, file_handle)
@@ -949,7 +942,7 @@ def connect_to_database(db_filename):
         db.text_factory = str
         return db
     except sqlite3.OperationalError, e:
-        sys.stderr.write("Error: Could not open database file\n")
+        sys.stderr.write("Error: Could not open database file due to: " + str(e))
         exit(3)
 
 
@@ -964,13 +957,12 @@ def initLogger():
 class InputParameters:
     pass
 
-def parse_commandline():
+def parse_commandline(argv):
     option_parser = optparse.OptionParser()
     option_parser.add_option('-v', '--version', dest='version')
     option_parser.add_option('-r', '--readonly', dest='readonly', default=False, action='store_true')
     option_parser.add_option('-b', '--backup-id', dest='backup_id')
-#    option_parser.add_option('-c', '--coverage', dest='coverage', default=False, action='store_true')
-    (options, args) = option_parser.parse_args()
+    (options, args) = option_parser.parse_args(argv)
     if len(args) < 2:
         sys.exit("PRINT USAGE")
     input_params = InputParameters()
@@ -983,30 +975,19 @@ def parse_commandline():
     return input_params
 
 
-def main():
-
-    input_params = parse_commandline()
-
-#    if input_params.coverage:
-#        import coverage
-#        coverage.erase()
-#        coverage.start()
+def main(argv=sys.argv[1:]):
+    input_params = parse_commandline(argv)
 
     initLogger()
     db = connect_to_database(os.path.join(input_params.device_dir, DBFILE))
     storage = ConsistenceStorage(db, input_params.device_dir)
 
     FS = CozyFS(storage, input_params, fetch_mp=False, version="CozyFS version 0.1", usage='Usage not quite sure yet')
-#    FS.parser.add_option("--test", metavar="READONLY", default="", help="version of backup this backup is based up on")
     FS.parse(['-f'])
     FS.main()
     FS.close()
     storage.close()
     db.close()
-
-#    if input_params.coverage:
-#        coverage.stop()
-#        print coverage.analysis()
 
 if __name__ == '__main__':
 #    cProfile.run('mount()', 'cozyfs-profile-output')

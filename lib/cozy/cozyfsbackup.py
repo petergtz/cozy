@@ -18,6 +18,7 @@ import os
 import subprocess
 import sqlite3
 import time
+import logging
 
 from filesystem import FileSystem
 
@@ -60,18 +61,20 @@ class CozyFSBackup(Backup):
 
     def __make_mount_point_dir(self, mount_point):
         if not os.path.exists(mount_point):
+            logging.getLogger('cozy.backup').debug('make mountpoint ' + mount_point)
             os.makedirs(mount_point)
 
     def __mount_cozyfs(self, mount_point, version, as_readonly):
         cmdline = self.__build_cmdline(mount_point, version, as_readonly)
+        logging.getLogger('cozy.backup').debug(' '.join(cmdline))
         process = self.subprocess_factory.Popen(cmdline, stderr=self.subprocess_factory.PIPE, stdout=self.subprocess_factory.PIPE)
+        process.args = cmdline
         self.__wait_until_filesystem_is_mounted(process, mount_point)
 
     def __build_cmdline(self, mount_point, version, as_readonly):
-        cmdline = [COZYFS_PATH, mount_point, '-o', 'target_dir=' + self.backup_path + ',backup_id=' + str(self.backup_id), '-f']
-        cmdline[-2] = cmdline[-2] + ',version=' + str(version)
+        cmdline = [COZYFS_PATH, self.backup_path, mount_point, '-b', str(self.backup_id), '-v', str(version)]
         if as_readonly:
-            cmdline[-2] = cmdline[-2] + ',ro'
+            cmdline.append('-r')
         return cmdline
 
     def __wait_until_filesystem_is_mounted(self, process, mount_point):
@@ -99,6 +102,7 @@ class CozyFSBackup(Backup):
 
     def clone(self, version):
         cmdline = [COZYFSSNAPHOT_PATH, self.backup_path, str(self.backup_id), str(version)]
+        logging.getLogger('cozy.backup').debug(' '.join(cmdline))
         self.subprocess_factory.call(cmdline)
 
 

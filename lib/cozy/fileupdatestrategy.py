@@ -99,7 +99,7 @@ class ChangeChangesFileUpdateStrategy(FileUpdateStrategy):
         self.__assert_writing_to_write_path(dst)
         if (src_stat.st_size != dst_stat.st_size or
             cozyutils.md5sum.md5sum(src) != cozyutils.md5sum.md5sum(dst)):
-            self.logger.debug("File: %s: updating file content.")
+            self.logger.debug("File: %s: updating file content.", dst)
             shutil.copy(src, dst)
             os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
             return True
@@ -111,7 +111,7 @@ class ChangeChangesFileUpdateStrategy(FileUpdateStrategy):
         if not os.path.islink(dst) or os.readlink(dst) != linkto:
             os.remove(dst)
             os.symlink(linkto, dst)
-            self.logger.debug("Symlink: %s: updating target to %s.", linkto)
+            self.logger.debug("Symlink: %s: updating target to %s.", dst, linkto)
             return True
         else:
             return False

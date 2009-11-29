@@ -54,7 +54,7 @@ def make_cozyfs(target_dir, backup_id):
 def mount(device_dir, mount_point, backup_id, version=None, as_readonly=False):
     os.mkdir(mount_point)
     try:
-        subprocess.call(['python-coverage', '-e'])
+#        subprocess.call(['python-coverage', '-e'])
         cmdline = __build_cmdline(device_dir, mount_point, backup_id, version, as_readonly)
         print '### MOUNTING: ' + ' '.join(cmdline)
         process = subprocess.Popen(cmdline)
@@ -266,6 +266,8 @@ def copy(source, target):
             print 'target: ', target_content
             raise Exception('compare failed: ' + source + ' ' + target)
 
+# FIXME: add size comparison here!!!
+
     except Exception, e:
         sys.exit('### FAILED copy ' + source + ' ' + target + ': ' + str(e))
     else:
@@ -419,6 +421,7 @@ def assert_file_in_pool_is_diff(file, original, new):
     with open(filename_expected, 'rb') as filehandle_expected:
         expected_content = filehandle_expected.read()
         expected_size = len(expected_content)
+    os.remove(filename_expected)
     if abs(expected_size - size_of_file_in_pool) > 100:
         sys.exit('### FAILED file in pool is not a diff ' + file)
     else:
@@ -427,12 +430,24 @@ def assert_file_in_pool_is_diff(file, original, new):
 
 try:
     make_cozyfs(target_dir=TARGET_DIR, backup_id=666)
+    time.sleep(1)
+    snapshot(TARGET_DIR, 666)
+
+    mount(TARGET_DIR, mountpath, 666)
+    copy(os.path.join(DATA_DIR, 'non-favorites-version'), 'samefile1')
+    copy(os.path.join(DATA_DIR, 'non-favorites-version'), 'samefile2')
+    umount(mountpath)
 
     mount(TARGET_DIR, mountpath, 666)
     copy(os.path.join(DATA_DIR, 'non-favorites-version'), 'myfile')
     umount(mountpath)
 
     version2 = snapshot(TARGET_DIR, 666)
+
+    mount(TARGET_DIR, mountpath, 666)
+    copy(os.path.join(DATA_DIR, 'non-favorites-version'), 'samefile1')
+    copy(os.path.join(DATA_DIR, 'non-favorites-version'), 'samefile2')
+    umount(mountpath)
 
     mount(TARGET_DIR, mountpath, 666, version2)
     copy(os.path.join(DATA_DIR, 'favorites-version'), 'myfile')

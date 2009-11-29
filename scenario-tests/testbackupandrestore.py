@@ -9,6 +9,7 @@ import subprocess
 import dbus
 from time import sleep
 import stat
+import traceback
 
 TC_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(TC_DIR)
@@ -20,7 +21,6 @@ import cozy.restorebackend
 import cozy.backupprovider
 import cozy.locationmanager
 
-COZY_MKFS_PATH = os.path.join(ROOT_DIR, 'mkfs.cozyfs.py')
 COZY_BACKUP_PATH = os.path.join(ROOT_DIR, 'cozy-backup')
 TEST_DATA = os.path.join(TC_DIR, 'TestData')
 
@@ -28,6 +28,8 @@ DOT_COZY = os.path.expanduser('~/.cozy')
 DOT_COZY_BACKUP = os.path.expanduser('~/.cozy.orig.tc')
 DATA = os.path.expanduser('~/Cozy-TC-Data')
 BACKUP_DIR = os.path.expanduser('~/Cozy-TC-Backup-Dir')
+
+os.environ['PATH'] += ':' + os.path.join(ROOT_DIR, 'cozyfs')
 
 
 class Setup:
@@ -42,8 +44,8 @@ class Setup:
 
         config = cozy.configuration.Configuration()
         config.backup_enabled = True
-        config.backup_type = 'PlainFS'
-#        config.backup_type = 'CozyFS'
+#        config.backup_type = 'PlainFS'
+        config.backup_type = 'CozyFS'
         #config.set_backup_id(BACKUP_ID)
         config.backup_location_type = 'absolute_path'
         config.backup_location_identifier = BACKUP_DIR
@@ -120,6 +122,8 @@ class DataHandler:
         create_data(self.data_dir + str(self.change_counter))
 
     def change_data(self):
+        print 'manual copy of data from ' + self.data_dir + str(self.change_counter) + \
+                ' to ' + self.data_dir + str(self.change_counter + 1)
         shutil.copytree(self.data_dir + str(self.change_counter), self.data_dir + str(self.change_counter + 1), True)
         self.change_counter += 1
         print 'making change number', self.change_counter
@@ -222,6 +226,10 @@ class CozyBackup:
     def backup_data(self):
         cmdline = [COZY_BACKUP_PATH, '-s']
         print '### BACKING UP DATA: ' + ' '.join(cmdline)
+
+#        import cozy.back_up
+#        cozy.back_up.back_up()
+#        ret = 0
         ret = subprocess.call(cmdline)
         if ret != 0:
             sys.exit('### FAILED backup_data')
@@ -250,6 +258,7 @@ class CozyBackup:
             print '### PASSED get_equivalent_path'
             return equiv_path
         except Exception, e:
+            traceback.print_exc(file=sys.stderr)
             sys.exit('### FAILED get_equivalent_path: ' + str(e))
 
 
