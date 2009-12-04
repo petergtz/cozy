@@ -154,7 +154,7 @@
                                       <object class="GtkVBox" id="vbox3">
                                         <property name="visible">True</property>
                                         <child>
-                                          <object class="GtkHBox" id="hbox1">
+                                          <object class="GtkHBox" id="hbox111">
                                             <property name="visible">True</property>
                                             <child>
                                               <object class="GtkLabel" id="label12">
@@ -380,7 +380,7 @@
               </object>
             </child>
             <child type="tab">
-              <object class="GtkLabel" id="label7">
+              <object class="GtkLabel" id="label777">
                 <property name="visible">True</property>
                 <property name="label" translatable="yes">General</property>
               </object>
@@ -531,7 +531,7 @@
               </packing>
             </child>
             <child>
-              <object class="GtkLabel" id="label7">
+              <object class="GtkLabel" id="label77">
                 <property name="visible">True</property>
                 <property name="label" translatable="yes">Cozy backup will now start to back up your data. This can slow down your computer. You can either run the backup now or disable it and enable it later.</property>
                 <property name="use_markup">True</property>
@@ -551,7 +551,7 @@
             <property name="visible">True</property>
             <property name="layout_style">end</property>
             <child>
-              <object class="GtkButton" id="go_back">
+              <object class="GtkButton" id="confirmation_go_back">
                 <property name="label" translatable="yes">Go Back to Configuration</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
