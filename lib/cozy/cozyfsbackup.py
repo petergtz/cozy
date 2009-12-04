@@ -67,7 +67,7 @@ class CozyFSBackup(Backup):
     def __mount_cozyfs(self, mount_point, version, as_readonly):
         cmdline = self.__build_cmdline(mount_point, version, as_readonly)
         logging.getLogger('cozy.backup').debug(' '.join(cmdline))
-        process = self.subprocess_factory.Popen(cmdline, stderr=self.subprocess_factory.PIPE, stdout=self.subprocess_factory.PIPE)
+        process = self.subprocess_factory.Popen(cmdline)
         process.args = cmdline
         self.__wait_until_filesystem_is_mounted(process, mount_point)
 
