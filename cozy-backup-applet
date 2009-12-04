@@ -36,3 +36,4 @@ else:
         os.environ['PYTHONPATH'] = BASE_DIR
 
 import cozy_backup_applet
+cozy_backup_applet.main()
