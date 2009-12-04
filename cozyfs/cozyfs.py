@@ -36,6 +36,7 @@ from cozyutils.md5sum import md5sum, md5sum_from_string
 import logging
 
 import time
+import random
 
 # import cProfile
 
@@ -50,7 +51,7 @@ DIRECTORY = 5
 
 DIFF_LIMIT = 0.5
 
-MAX_TRANSACTIONS = 1
+MAX_TRANSACTIONS = 100
 
 MD5SUM_FOR_EMPTY_STRING = md5sum_from_string('')
 
@@ -341,7 +342,7 @@ class DataPathDepChain(object):
         return merged_diff_path
 
 def time_string():
-    return 'TIME_STAMP_' + str(time.time())
+    return '_TIME_STAMP_' + str(time.time()) + '_RANDOM_' + str(random.randint(0, 100000))
 
 
 class OpenFileInReadMode(object):
@@ -948,7 +949,7 @@ def connect_to_database(db_filename):
 
 def initLogger():
     log = logging.getLogger('cozyfs')
-    log.setLevel(logging.DEBUG)
+    log.setLevel(logging.INFO)
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(logging.Formatter('  Line %(lineno)-3d %(levelname)-7s Fnc: %(funcName)-10s: %(message)s'))
