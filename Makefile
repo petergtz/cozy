@@ -16,6 +16,8 @@ nautilus-patch/patch-applied-indicator : nautilus-patch/tar-extracted-indicator
 	cd nautilus-patch/$(NAUTILUS_RELEASE) && patch -p0 <../cozy-support.diff
 	touch nautilus-patch/patch-applied-indicator
 
+nautilus-download-and-patch : nautilus-patch/patch-applied-indicator
+
 nautilus-patch/$(NAUTILUS_RELEASE)/src/nautilus : nautilus-patch/patch-applied-indicator
 	cd nautilus-patch/$(NAUTILUS_RELEASE) && ./configure --prefix=$(PREFIX)
 	cd nautilus-patch/$(NAUTILUS_RELEASE) && make
