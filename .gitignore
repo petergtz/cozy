@@ -1,3 +1,4 @@
 cozyfs-profile-output-*
 *.pyc
 .externalToolBuilders
+*~

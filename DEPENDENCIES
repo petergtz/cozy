@@ -1,13 +1,8 @@
 Dependencies
 =============
 
-python-fuse
-xdelta3
-python-pysqlite2
-python-nautilus
-python
-
-
-On Debian based distributions:
-apt-get install python-fuse xdelta3 python-pysqlite2 python
+python-fuse (CVS rev 1.44)
+xdelta3 (version 3.0v)
+python (version 2.6)
+nautilus with cozy dbus support
 
