@@ -14,7 +14,6 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-import os.path
 import os
 import pygtk
 pygtk.require('2.0')
@@ -22,13 +21,12 @@ import gtk
 
 from cozy.pathbasedbackuplocation import PathBasedBackupLocation
 from cozy.removeablebackuplocation import RemoveableBackupLocation
-from cozy.locationmanager import LocationManager
+
 import dbus
 
 
 
 import subprocess
-import time
 
 import re
 import xdg.BaseDirectory, xdg.DesktopEntry
@@ -177,7 +175,7 @@ class ConfigMediator:
 
     def on_close(self, widget, data=None):
         if self.__can_close():
-           self.destroy(widget, data)
+            self.destroy(widget, data)
 
     def delete_event(self, widget, event, data=None):
         return not self.__can_close()

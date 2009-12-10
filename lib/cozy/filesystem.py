@@ -16,7 +16,7 @@
 
 import subprocess
 import os
-from os.path import dirname, join as join_path
+from os.path import join as join_path
 
 class FileSystem(object):
 

@@ -15,7 +15,6 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 import dbus
-import dbus.service
 
 class StandardFallbackRestoreClientLoader(object):
     def __init__(self, data_path):

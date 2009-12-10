@@ -122,7 +122,7 @@ class RestoreBackend(object):
             path = path.replace(self.config.data_path, '')
             return path.lstrip('/')
         else:
-            for backup_version, filesystem in self.filesystems.items():
+            for filesystem in self.filesystems.values():
                 if path.startswith(filesystem.mount_point):
                     path = path.replace(filesystem.mount_point , '')
                     return path.lstrip('/')

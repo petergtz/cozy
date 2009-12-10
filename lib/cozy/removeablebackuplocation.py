@@ -41,7 +41,7 @@ class RemoveableBackupLocation(BackupLocation):
             devices = manager.FindDeviceStringMatch('volume.mount_point', mount_path, dbus_interface='org.freedesktop.Hal.Manager')
             if len(devices) == 1:
                 break
-            (mount_path, tail) = path_split(mount_path)
+            (mount_path, tail) = path_split(mount_path) #@UnusedVariable
         [device_name] = devices
         relative_path = arbitrary_path.replace(mount_path, '', 1).lstrip('/')
         return device_name, relative_path

@@ -19,7 +19,7 @@ import os
 
 class SymlinkedFileSystem(FileSystem):
     def _unmount(self):
-       pass
+        pass
 
     def _remove_mount_point_dir(self):
         if os.path.exists(self.mount_point):

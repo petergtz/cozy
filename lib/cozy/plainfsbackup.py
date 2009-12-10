@@ -15,9 +15,9 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 import os
-from time import sleep, time
+from time import time
 
-from cozyutils.date_helper import epoche2date, date2epoche
+from cozyutils.date_helper import epoche2date
 
 from symlinkedfilesystem import SymlinkedFileSystem
 

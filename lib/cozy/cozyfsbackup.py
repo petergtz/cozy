@@ -24,7 +24,7 @@ from filesystem import FileSystem
 
 from backup import Backup
 
-from cozyutils.date_helper import epoche2date, date2epoche
+from cozyutils.date_helper import epoche2date
 
 
 DBFILE = 'fsdb'
