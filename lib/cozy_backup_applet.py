@@ -191,16 +191,11 @@ class CozyIcon(gtk.StatusIcon):
     def __show_popup_menu(self, activation_time=0):
         self.menu.popup(None, None, gtk.status_icon_position_menu, 0, activation_time, self)
 
-def alive():
-    sys.stdout.write('.')
-    return True
-
 def main():
     gobject.threads_init()
     gtk.gdk.threads_init()
     DBusGMainLoop(set_as_default=True)
 
-    gobject.timeout_add(1000, alive)
     mainloop = gobject.MainLoop()
 
     session_bus = dbus.SessionBus()
