@@ -18,11 +18,8 @@ from __future__ import with_statement
 
 import os.path
 import ConfigParser
-import dbus
 
 import random
-
-from  cozyutils.md5sum import md5sum_from_string
 
 class Configuration(object):
 
@@ -63,7 +60,7 @@ class Configuration(object):
     def __get_backup_enabled(self):
         try:
             return self.parser.getboolean('globals', 'backup_enabled')
-        except ConfigParser.Error, e:
+        except ConfigParser.Error:
             return None
 
     def __set_backup_enabled(self, enable):
@@ -73,7 +70,7 @@ class Configuration(object):
     def __get_data_path(self):
         try:
             return self.parser.get('globals', 'data_path').rstrip('/')
-        except ConfigParser.Error, e:
+        except ConfigParser.Error:
             return None
 
     def __set_data_path(self, data_path):
@@ -83,7 +80,7 @@ class Configuration(object):
     def __get_backup_id(self):
         try:
             return self.parser.getint('backup', 'backup_id')
-        except ConfigParser.Error, e:
+        except ConfigParser.Error:
             None
 
     def __set_backup_id(self, backup_id):
@@ -95,7 +92,7 @@ class Configuration(object):
     def __get_backup_type(self):
         try:
             return self.parser.get('backup', 'type')
-        except ConfigParser.Error, e:
+        except ConfigParser.Error:
             None
 
     def __set_backup_type(self, value):
@@ -105,7 +102,7 @@ class Configuration(object):
     def __get_backup_location_identifier(self):
         try:
             return self.parser.get('backup_location', 'location_identifier')
-        except ConfigParser.Error, e:
+        except ConfigParser.Error:
             None
 
     def __set_backup_location_identifier(self, value):
@@ -116,7 +113,7 @@ class Configuration(object):
     def __get_backup_location_type(self):
         try:
             return self.parser.get('backup_location', 'location_type')
-        except ConfigParser.Error, e:
+        except ConfigParser.Error:
             None
 
     def __set_backup_location_type(self, value):

@@ -15,9 +15,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 import os
-from time import sleep, time
-
-from cozyutils.date_helper import epoche2date, date2epoche
+from time import time
 
 from plainfsbackup import PlainFSBackup
 from cozy.fileupdatestrategy import ChangeReplacesFileUpdateStrategy
