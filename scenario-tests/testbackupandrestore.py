@@ -275,6 +275,7 @@ with Setup():
 
             for change_number in range(len(data_handler.changes)):
                 cozy_backup.backup_data()
+                sleep(1) # See filesystem.py why this is here.
                 data_handler.change_data()
 
             current_path = DATA

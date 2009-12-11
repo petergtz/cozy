@@ -67,7 +67,7 @@ class CozyFSBackup(Backup):
     def __mount_cozyfs(self, mount_point, version, as_readonly):
         cmdline = self.__build_cmdline(mount_point, version, as_readonly)
         logging.getLogger('cozy.backup').debug(' '.join(cmdline))
-        process = self.subprocess_factory.Popen(cmdline)
+        process = self.subprocess_factory.Popen(cmdline, stderr=self.subprocess_factory.PIPE)
         process.args = cmdline
         self.__wait_until_filesystem_is_mounted(process, mount_point)
 
@@ -85,7 +85,7 @@ class CozyFSBackup(Backup):
             mtab_file = open('/etc/mtab', 'r')
             mtab_string = mtab_file.read()
             mtab_file.close()
-            if mtab_string.find(mount_point) != -1:
+            if mtab_string.find(mount_point) != -1 and os.path.ismount(mount_point):
                 return
             time_passed = time.time() - start_time
         self.__handle_return_code_of(process)
@@ -96,8 +96,8 @@ class CozyFSBackup(Backup):
         elif  process.returncode == 4:
             raise Backup.MountException('Error: Mount failed because filesystem is locked.')
         else:
-            (stdoutdata, stderrdata) = process.communicate()
-            raise Backup.MountException('Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: ' + stderrdata + stdoutdata)
+#            (stdoutdata, stderrdata) = process.communicate()
+            raise Backup.MountException('Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: ...')# + stderrdata)
 
 
     def clone(self, version):

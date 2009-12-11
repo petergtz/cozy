@@ -33,7 +33,7 @@
 
 import os
 import shutil
-import cozyutils
+import cozyutils.md5sum
 
 write_on_user_data_string = 'Tried to write user data during backup: '
 

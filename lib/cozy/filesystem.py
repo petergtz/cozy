@@ -17,6 +17,9 @@
 import subprocess
 import os
 from os.path import join as join_path
+import time
+
+SUCCESSFUL_MOUNT_TIMEOUT = 2
 
 class FileSystem(object):
 
@@ -37,7 +40,23 @@ class FileSystem(object):
 
     def _unmount(self):
         if self._is_mounted():
-            subprocess.call(['fusermount', '-z', '-u', self.mount_point])
+            subprocess.check_call(['fusermount', '-z', '-u', self.mount_point])
+            self.__wait_until_filesystem_is_unmounted(self.mount_point)
+
+    def __wait_until_filesystem_is_unmounted(self, mount_point):
+        start_time = time.time()
+        time_passed = 0
+
+        while (time_passed < SUCCESSFUL_MOUNT_TIMEOUT):
+            mtab_file = open('/etc/mtab', 'r')
+            mtab_string = mtab_file.read()
+            mtab_file.close()
+            if mtab_string.find(mount_point) == -1 and not os.path.ismount(mount_point):
+                time.sleep(1) # FIXME: unfortunately cozyfs takes a bit of time to close itself, after fusermount -u was called.
+                              # This should be fixed, because a second not be enough. However, if we don't start the next backup
+                              # immediately, it doesn't matter. So far it's only critical during tests!
+                return
+            time_passed = time.time() - start_time
 
     def _remove_mount_point_dir(self):
         if self.os.path.exists(self.mount_point):

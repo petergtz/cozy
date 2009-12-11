@@ -952,20 +952,21 @@ def initLogger():
     log.setLevel(logging.INFO)
 
     handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(logging.Formatter('  Line %(lineno)-3d %(levelname)-7s Fnc: %(funcName)-10s: %(message)s'))
+    handler.setFormatter(logging.Formatter('  %(asctime)s Line %(lineno)-3d %(levelname)-7s Fnc: %(funcName)-10s: %(message)s'))
     log.addHandler(handler)
 
 class InputParameters:
     pass
 
 def parse_commandline(argv):
-    option_parser = optparse.OptionParser()
-    option_parser.add_option('-v', '--version', dest='version')
-    option_parser.add_option('-r', '--readonly', dest='readonly', default=False, action='store_true')
-    option_parser.add_option('-b', '--backup-id', dest='backup_id')
+    option_parser = optparse.OptionParser(usage="%prog <device-dir> <mount-point> [<options>]")
+    option_parser.add_option('-v', '--version', dest='version', help='Specifies the backup-version to mount.')
+    option_parser.add_option('-r', '--readonly', dest='readonly', default=False, action='store_true', help='Specifies to mount the backup-version as read-only.')
+    option_parser.add_option('-b', '--backup-id', dest='backup_id', help='Specifies the backup-ID of the backup.')
     (options, args) = option_parser.parse_args(argv)
     if len(args) < 2:
-        sys.exit("PRINT USAGE")
+        option_parser.print_help()
+        sys.exit("cozyfs.py <device-dir> <mount-point> [<options>]")
     input_params = InputParameters()
     input_params.device_dir = args[0]
     input_params.mountpoint = args[1]
@@ -983,12 +984,14 @@ def main(argv=sys.argv[1:]):
     db = connect_to_database(os.path.join(input_params.device_dir, DBFILE))
     storage = ConsistenceStorage(db, input_params.device_dir)
 
-    FS = CozyFS(storage, input_params, fetch_mp=False, version="CozyFS version 0.1", usage='Usage not quite sure yet')
+    FS = CozyFS(storage, input_params, fetch_mp=False, usage='cozyfs.py <device-dir> <mount-point> [<options>]')
     FS.parse(['-f'])
     FS.main()
-    FS.close()
     storage.close()
     db.close()
+
+    FS.close()
+    logging.getLogger('cozyfs').debug("exiting properly.")
 
 if __name__ == '__main__':
 #    cProfile.run('mount()', 'cozyfs-profile-output')
