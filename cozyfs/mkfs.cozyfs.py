@@ -23,54 +23,56 @@ import errno
 import time
 import tempfile
 import shutil
+import optparse
 
 FSDB = 'fsdb'
 
-if len(sys.argv) not in [3, 4]:
-    exit('Wrong number of arguments. Todo: USAGE (targetdir, unique backupid, force)')
 
-target_path = sys.argv[1]
-backup_id = int(sys.argv[2])
-force = False
-if len(sys.argv) == 4:
-    if sys.argv[3] == 'force':
-        force = True
+def parse_cmdline():
+    option_parser = optparse.OptionParser(usage="%prog [-f] <device-dir> <backup-id> ")
+    option_parser.add_option('-f', '--force', dest='force', default=False, action='store_true', help='Deletes all existing data with the same backup-id.')
+    option_parser.add_option('-n', '--no-version', dest='should_create_first_version', default=True, action='store_false', help='If given, no first version will be created in the database. A version must then be created using cozyfssnapshot.py.')
+    (options, args) = option_parser.parse_args()
+    if len(args) != 2:
+        option_parser.print_help()
+        sys.exit()
+    return args[0], args[1], options.force, options.should_create_first_version
 
-for dir in ['FilePool', 'Tmp']:
-    try:
-        os.mkdir(os.path.join(target_path, dir))
-    except OSError, e:
-        if e.errno != errno.EEXIST:
-            print 'Cannot make dirs ' + dir + ' in the specified folder: ' + e.strerror
+def create_dirs_if_not_existent(device_dir):
+    for dir in ['FilePool', 'Tmp']:
+        path = os.path.join(device_dir, dir)
+        if not os.path.exists(path):
+            os.mkdir(path)
 
-tempdir = tempfile.mkdtemp()
-if os.path.lexists(os.path.join(target_path, FSDB)):
-	shutil.copy(os.path.join(target_path, FSDB), os.path.join(tempdir, FSDB))
+def connect_to_db(device_dir):
+    db = sqlite3.connect(os.path.join(device_dir, FSDB))
+    db.row_factory = sqlite3.Row
+    db.text_factory = str
+    return db
 
-db = sqlite3.connect(os.path.join(tempdir, FSDB))
-db.row_factory = sqlite3.Row
-db.text_factory = str
+def create_tables_if_not_existent(db):
 
-db.executescript("""
-CREATE TABLE IF NOT EXISTS Versions (backup_id NUMERIC, version NUMERIC, based_on_version NUMERIC);
-CREATE TABLE IF NOT EXISTS data_path (backup_id NUMERIC, version NUMERIC, data_path TEXT, inode NUMERIC);
-CREATE TABLE IF NOT EXISTS type (backup_id NUMERIC, version NUMERIC, type NUMERIC, inode NUMERIC);
-CREATE TABLE IF NOT EXISTS Nodes (backup_id NUMERIC, version NUMERIC, nodename TEXT, parent_node_id NUMERIC, node_id NUMERIC, inode_number NUMERIC);
-CREATE TABLE IF NOT EXISTS atime (atime NUMERIC, version NUMERIC, backup_id NUMERIC, inode NUMERIC);
-CREATE TABLE IF NOT EXISTS ctime (backup_id NUMERIC, version NUMERIC, ctime NUMERIC, inode NUMERIC);
-CREATE TABLE IF NOT EXISTS gid (backup_id NUMERIC, version NUMERIC, gid NUMERIC, inode NUMERIC);
-CREATE TABLE IF NOT EXISTS mode (backup_id NUMERIC, version NUMERIC, inode NUMERIC, mode NUMERIC);
-CREATE TABLE IF NOT EXISTS mtime (backup_id NUMERIC, version NUMERIC, inode NUMERIC, mtime NUMERIC);
-CREATE TABLE IF NOT EXISTS size (backup_id NUMERIC, version NUMERIC, inode NUMERIC, size NUMERIC);
-CREATE TABLE IF NOT EXISTS uid (backup_id NUMERIC, version NUMERIC, inode NUMERIC, uid NUMERIC);
-CREATE TABLE IF NOT EXISTS FileDiffDependencies (data_path TEXT, based_on_data_path TEXT);
-""")
+    db.executescript("""
+    CREATE TABLE IF NOT EXISTS Versions (backup_id NUMERIC, version NUMERIC, based_on_version NUMERIC);
+    CREATE TABLE IF NOT EXISTS data_path (backup_id NUMERIC, version NUMERIC, data_path TEXT, inode NUMERIC);
+    CREATE TABLE IF NOT EXISTS type (backup_id NUMERIC, version NUMERIC, type NUMERIC, inode NUMERIC);
+    CREATE TABLE IF NOT EXISTS Nodes (backup_id NUMERIC, version NUMERIC, nodename TEXT, parent_node_id NUMERIC, node_id NUMERIC, inode_number NUMERIC);
+    CREATE TABLE IF NOT EXISTS atime (atime NUMERIC, version NUMERIC, backup_id NUMERIC, inode NUMERIC);
+    CREATE TABLE IF NOT EXISTS ctime (backup_id NUMERIC, version NUMERIC, ctime NUMERIC, inode NUMERIC);
+    CREATE TABLE IF NOT EXISTS gid (backup_id NUMERIC, version NUMERIC, gid NUMERIC, inode NUMERIC);
+    CREATE TABLE IF NOT EXISTS mode (backup_id NUMERIC, version NUMERIC, inode NUMERIC, mode NUMERIC);
+    CREATE TABLE IF NOT EXISTS mtime (backup_id NUMERIC, version NUMERIC, inode NUMERIC, mtime NUMERIC);
+    CREATE TABLE IF NOT EXISTS size (backup_id NUMERIC, version NUMERIC, inode NUMERIC, size NUMERIC);
+    CREATE TABLE IF NOT EXISTS uid (backup_id NUMERIC, version NUMERIC, inode NUMERIC, uid NUMERIC);
+    CREATE TABLE IF NOT EXISTS FileDiffDependencies (data_path TEXT, based_on_data_path TEXT);
+    """)
 
+    db.commit()
 
-if db.execute('SELECT count(*) FROM Versions WHERE backup_id=?', (backup_id,)).fetchone()[0] > 0 and not force:
-#    exit('Specified backup_id already exists in this filesystem. To overwrite this, use force')
-    print 'Specified backup_id already exists in this filesystem. To overwrite this, use force'
-elif force:
+def backup_id_exists_already(db, backup_id):
+    return db.execute('SELECT count(*) FROM Versions WHERE backup_id=?', (backup_id,)).fetchone()[0] > 0
+
+def delete_backup_ids(db, backup_id):
     db.execute('DELETE FROM data_path WHERE backup_id = ?', (backup_id,))
     db.execute('DELETE FROM Nodes WHERE backup_id = ?', (backup_id,))
     db.execute('DELETE FROM Versions WHERE backup_id = ?', (backup_id,))
@@ -84,18 +86,37 @@ elif force:
     db.execute('DELETE FROM size WHERE backup_id = ?', (backup_id,))
     db.execute('DELETE FROM FileDiffDepencies', (backup_id,))
 
-version = int(time.time())
+    db.commit()
 
-if db.execute('SELECT count(*) FROM Versions WHERE backup_id=?', (backup_id,)).fetchone()[0] == 0:
+def create_first_version(db, backup_id):
+    version = int(time.time())
     db.execute("INSERT INTO Versions (backup_id,version,based_on_version) values (?,?,?)",
             (backup_id, version, None))
+    db.commit()
+    return version
 
-db.commit()
+def main():
+    device_dir, backup_id, should_delete_existing_backup_ids, \
+            should_create_first_version = parse_cmdline()
+    create_dirs_if_not_existent(device_dir)
+    db = connect_to_db(device_dir)
+    create_tables_if_not_existent(db)
+    a_version_exists_already = False
+    if backup_id_exists_already(db, backup_id):
+        if should_delete_existing_backup_ids:
+            delete_backup_ids(db, backup_id)
+        else:
+            print '''Specified backup_id already exists in this backup. 
+                     Nothing will be changed. If you want to delete all
+                     existing data with the specified backup_id, use --force.'''
+            a_version_exists_already = True
 
-db.close()
+    if should_create_first_version and not a_version_exists_already:
+        version = create_first_version(db, backup_id)
+        print version
 
-shutil.copy(os.path.join(tempdir, FSDB), os.path.join(target_path, FSDB))
+    db.close()
 
-shutil.rmtree(tempdir)
 
-print version
+if __name__ == '__main__':
+    main()

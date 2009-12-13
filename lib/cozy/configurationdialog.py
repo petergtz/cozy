@@ -21,6 +21,7 @@ import gtk
 
 from cozy.pathbasedbackuplocation import PathBasedBackupLocation
 from cozy.removeablebackuplocation import RemoveableBackupLocation
+from cozy.locationmanager import LocationManager
 
 import dbus
 
@@ -71,8 +72,7 @@ class ConfigMediator:
         if self.config.backup_enabled is not None:
             self.enable_checkbox.set_active(self.config.backup_enabled)
         else:
-            print "Warning: Cozy backup is not configured properly"
-            print "Disabling backup."
+            print "No configuration found. Creating new one with backup disabled."
             self.enable_checkbox.set_active(False)
 
         self.global_sections.set_sensitive(self.enable_checkbox.get_active())
@@ -187,10 +187,11 @@ class ConfigMediator:
             return True
 
     def __can_close_although_changed(self):
-        if self.__config_is_incomplete():
-            result = self.__handle_incomplete_config()
-            if result == 'cannot_close':
-                return False
+        if self.config.backup_enabled:
+            if self.__config_is_incomplete():
+                result = self.__handle_incomplete_config()
+                if result == 'cannot_close':
+                    return False
         return True
 
 
@@ -233,10 +234,14 @@ class ConfigMediator:
             self.__remove_backup_applet_autostart()
 
     def __create_filestructure_in_backup_location(self):
+        system_bus = dbus.SystemBus()
+        location_manager = LocationManager(system_bus)
+        backup_location = location_manager.get_backup_location(self.config)
+        backup_path = backup_location.get_path()
         if self.config.backup_type == 'CozyFS':
-            subprocess.check_call([COZY_MKFS_PATH, self.config.backup_location, self.config.backup_id])
+            subprocess.check_call([COZY_MKFS_PATH, backup_path, str(self.config.backup_id)])
         elif self.config.backup_type == 'PlainFS':
-            os.makedirs(os.path.join(self.config.backup_location, str(self.config.backup_id), '0'))
+            os.makedirs(os.path.join(backup_path, str(self.config.backup_id), '0'))
         elif self.config.backup_type == 'HardlinkedFS':
             pass
 
