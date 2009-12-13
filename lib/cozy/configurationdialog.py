@@ -222,6 +222,7 @@ class ConfigMediator:
 
     def __react_on_config_changes(self):
         if self.config.backup_enabled:
+            self.__create_filestructure_in_backup_location()
             self.__add_backup_applet_autostart()
             if self.config.backup_location_type == 'absolute_path':
                 self.__add_crontab_entry()
@@ -230,6 +231,14 @@ class ConfigMediator:
         else:
             self.__remove_crontab_entry()
             self.__remove_backup_applet_autostart()
+
+    def __create_filestructure_in_backup_location(self):
+        if self.config.backup_type == 'CozyFS':
+            subprocess.check_call([COZY_MKFS_PATH, self.config.backup_location, self.config.backup_id])
+        elif self.config.backup_type == 'PlainFS':
+            os.makedirs(os.path.join(self.config.backup_location, str(self.config.backup_id), '0'))
+        elif self.config.backup_type == 'HardlinkedFS':
+            pass
 
     def present(self):
         self.configuration_window.present()

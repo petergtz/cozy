@@ -31,22 +31,23 @@ BACKUP_DIR = os.path.expanduser('~/Cozy-TC-Backup-Dir')
 
 os.environ['PATH'] += ':' + os.path.join(ROOT_DIR, 'cozyfs')
 
+MAKE_COZYFS = 'mkfs.cozyfs.py'
+BACKUP_TYPE = 'CozyFS'
 
 class Setup:
     def __enter__(self):
-        self.create_configuration()
-        self.make_cozyfs()
+        os.mkdir(BACKUP_DIR)
+        self.__create_configuration()
+        self.__create_filestructure_in_backup_location()
         return self
 
-    def create_configuration(self):
+    def __create_configuration(self):
         if os.path.exists(DOT_COZY) and not os.path.exists(DOT_COZY_BACKUP):
             os.rename(DOT_COZY, DOT_COZY_BACKUP)
 
         config = cozy.configuration.Configuration()
         config.backup_enabled = True
-#        config.backup_type = 'PlainFS'
-        config.backup_type = 'CozyFS'
-        #config.set_backup_id(BACKUP_ID)
+        config.backup_type = BACKUP_TYPE
         config.backup_location_type = 'absolute_path'
         config.backup_location_identifier = BACKUP_DIR
         config.data_path = DATA
@@ -54,8 +55,14 @@ class Setup:
 
         self.backup_id = config.backup_id
 
-    def make_cozyfs(self):
-        os.mkdir(BACKUP_DIR)
+
+    def __create_filestructure_in_backup_location(self):
+        if BACKUP_TYPE == 'CozyFS':
+            subprocess.check_call([MAKE_COZYFS, BACKUP_DIR, str(self.backup_id)])
+        elif BACKUP_TYPE == 'PlainFS':
+            os.makedirs(os.path.join(BACKUP_DIR, str(self.backup_id), '0'))
+        elif BACKUP_TYPE == 'HardlinkedFS':
+            pass
 
     def __exit__(self, type, value, traceback):
         if os.path.exists(DOT_COZY_BACKUP):

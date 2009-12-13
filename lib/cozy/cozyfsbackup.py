@@ -29,7 +29,6 @@ from cozyutils.date_helper import epoche2date
 
 DBFILE = 'fsdb'
 
-COZY_MKFS_PATH = 'mkfs.cozyfs.py'
 COZYFS_PATH = 'cozyfs.py'
 COZYFSSNAPHOT_PATH = 'cozyfssnapshot.py'
 
@@ -42,13 +41,7 @@ class CozyFSBackup(Backup):
         Backup.__init__(self, backup_path, backup_id)
         self.subprocess_factory = subprocess_factory
         self.db_connection_factory = db_connection_factory
-        self.__make_cozy_fs()
 
-    def __make_cozy_fs(self):
-        cmdline = [COZY_MKFS_PATH, self.backup_path, str(self.backup_id)]
-        rc = self.subprocess_factory.call(cmdline)
-        if rc != 0:
-            raise Exception('Call to mkfs.cozy.py failed.')
 
     def get_all_versions(self):
         return self.get_previous_versions(self.VERSION_PRESENT)
