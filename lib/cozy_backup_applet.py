@@ -26,12 +26,8 @@ from dbus.mainloop.glib import DBusGMainLoop
 
 import dbus
 import gobject
-import glib
 
-import subprocess
-import sys
 import os
-import time
 import threading
 
 import cozy.back_up
@@ -192,8 +188,8 @@ class CozyIcon(gtk.StatusIcon):
         self.menu.popup(None, None, gtk.status_icon_position_menu, 0, activation_time, self)
 
 def main():
-    gobject.threads_init()
-    gtk.gdk.threads_init()
+    gobject.threads_init() #@UndefinedVariable
+    gtk.gdk.threads_init() #@UndefinedVariable
     DBusGMainLoop(set_as_default=True)
 
     mainloop = gobject.MainLoop()
