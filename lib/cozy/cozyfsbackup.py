@@ -60,7 +60,7 @@ class CozyFSBackup(Backup):
     def __mount_cozyfs(self, mount_point, version, as_readonly):
         cmdline = self.__build_cmdline(mount_point, version, as_readonly)
         logging.getLogger('cozy.backup').debug(' '.join(cmdline))
-        process = self.subprocess_factory.Popen(cmdline, stderr=self.subprocess_factory.PIPE)
+        process = self.subprocess_factory.Popen(cmdline)#, stderr=self.subprocess_factory.PIPE)
         process.args = cmdline
         self.__wait_until_filesystem_is_mounted(process, mount_point)
 
@@ -90,11 +90,15 @@ class CozyFSBackup(Backup):
             raise Backup.MountException('Error: Mount failed because filesystem is locked.')
         else:
 #            (stdoutdata, stderrdata) = process.communicate()
-            raise Backup.MountException('Error: Mount cmd :  ' + ' '.join(process.args) + 'failed due to errors: ...')# + stderrdata)
+            stderrdata = 'not implemented'
+            raise Backup.MountException('Error: Mount cmd :  ' + ' '.join(process.args) + ' failed due to errors: ' + stderrdata)
 
 
     def clone(self, version):
-        cmdline = [COZYFSSNAPHOT_PATH, self.backup_path, str(self.backup_id), str(version)]
+        if version == self.VERSION_NONE:
+            cmdline = [COZYFSSNAPHOT_PATH, self.backup_path, str(self.backup_id)]
+        else:
+            cmdline = [COZYFSSNAPHOT_PATH, self.backup_path, str(self.backup_id), '-b', str(version)]
         logging.getLogger('cozy.backup').debug(' '.join(cmdline))
         self.subprocess_factory.call(cmdline)
 
@@ -103,7 +107,10 @@ class CozyFSBackup(Backup):
         db = self.__connect_to_db()
         latest_version = db.execute("select max(version) from Versions where backup_id=?", (self.backup_id,)).fetchone()[0]
         db.close()
-        return latest_version
+        if latest_version is None:
+            return self.VERSION_NONE
+        else:
+            return latest_version
 
     def _get_base_version_of(self, current_version):
         db = self.__connect_to_db()

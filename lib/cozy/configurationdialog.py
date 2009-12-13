@@ -239,7 +239,7 @@ class ConfigMediator:
         backup_location = location_manager.get_backup_location(self.config)
         backup_path = backup_location.get_path()
         if self.config.backup_type == 'CozyFS':
-            subprocess.check_call([COZY_MKFS_PATH, backup_path, str(self.config.backup_id)])
+            subprocess.check_call([COZY_MKFS_PATH, '--no-version', backup_path, str(self.config.backup_id)])
         elif self.config.backup_type == 'PlainFS':
             os.makedirs(os.path.join(backup_path, str(self.config.backup_id), '0'))
         elif self.config.backup_type == 'HardlinkedFS':

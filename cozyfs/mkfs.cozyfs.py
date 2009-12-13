@@ -36,7 +36,7 @@ def parse_cmdline():
     if len(args) != 2:
         option_parser.print_help()
         sys.exit()
-    return args[0], args[1], options.force, options.should_create_first_version
+    return args[0], int(args[1]), options.force, options.should_create_first_version
 
 def create_dirs_if_not_existent(device_dir):
     for dir in ['FilePool', 'Tmp']:
@@ -98,7 +98,9 @@ def create_first_version(db, backup_id):
 def main():
     device_dir, backup_id, should_delete_existing_backup_ids, \
             should_create_first_version = parse_cmdline()
+
     create_dirs_if_not_existent(device_dir)
+
     db = connect_to_db(device_dir)
     create_tables_if_not_existent(db)
     a_version_exists_already = False

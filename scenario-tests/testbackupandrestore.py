@@ -58,7 +58,7 @@ class Setup:
 
     def __create_filestructure_in_backup_location(self):
         if BACKUP_TYPE == 'CozyFS':
-            subprocess.check_call([MAKE_COZYFS, BACKUP_DIR, str(self.backup_id)])
+            subprocess.check_call([MAKE_COZYFS, '--no-version', BACKUP_DIR, str(self.backup_id)])
         elif BACKUP_TYPE == 'PlainFS':
             os.makedirs(os.path.join(BACKUP_DIR, str(self.backup_id), '0'))
         elif BACKUP_TYPE == 'HardlinkedFS':
