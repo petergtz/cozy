@@ -72,8 +72,11 @@ class CozyIcon(gtk.StatusIcon):
         self.config_dialog = None
         self.restore_frontend = None
 
+        self.__create_settings_and_exit_menu()
+
         self.__update_backup_availability()
-        self.connect_object("popup-menu", CozyIcon.on_popup_menu, self)
+        self.connect_object("popup-menu", CozyIcon.__on_popup_right_click_menu, self)
+        self.connect_object("activate", CozyIcon.__on_popup_left_click_menu, self)
 
         if not self.config.backup_enabled:
             self.on_show_config_dialog(None)
@@ -93,32 +96,46 @@ class CozyIcon(gtk.StatusIcon):
         self.__create_unavailable_menu()
 
     def __create_available_menu(self):
-        self.menu = gtk.Menu()
+        self.left_click_menu = gtk.Menu()
 
         menu_item = gtk.MenuItem('Start Backup')
-        self.menu.append(menu_item)
+        self.left_click_menu.append(menu_item)
         menu_item.connect_object("activate", CozyIcon.on_start_backup, self)
         menu_item.show()
 
         menu_item = gtk.MenuItem('Start Restore Session...')
-        self.menu.append(menu_item)
+        self.left_click_menu.append(menu_item)
         menu_item.connect_object("activate", CozyIcon.on_start_restore_session, self)
         menu_item.show()
 
-        self.__create_settings_and_exit_menu_items()
-
     def __create_unavailable_menu(self):
-        self.menu = gtk.Menu()
-        self.__create_settings_and_exit_menu_items()
+        self.left_click_menu = gtk.Menu()
 
-    def __create_settings_and_exit_menu_items(self):
+        menu_item = gtk.MenuItem('Start Backup')
+        self.left_click_menu.append(menu_item)
+        menu_item.set_sensitive(False)
+        menu_item.show()
+
+        menu_item = gtk.MenuItem('Start Restore Session...')
+        self.left_click_menu.append(menu_item)
+        menu_item.set_sensitive(False)
+        menu_item.show()
+
+    def __create_settings_and_exit_menu(self):
+        self.right_click_menu = gtk.Menu()
+
         menu_item = gtk.MenuItem('Settings...')
-        self.menu.append(menu_item)
+        self.right_click_menu.append(menu_item)
         menu_item.connect_object("activate", CozyIcon.on_show_config_dialog, self, 'Settings')
         menu_item.show()
 
+        menu_item = gtk.MenuItem('About')
+        self.right_click_menu.append(menu_item)
+        menu_item.connect_object("activate", CozyIcon.on_about, self, 'About')
+        menu_item.show()
+
         menu_item = gtk.MenuItem('Exit')
-        self.menu.append(menu_item)
+        self.right_click_menu.append(menu_item)
         menu_item.connect_object("activate", CozyIcon.on_exit, self, 'Exit')
         menu_item.show()
 
@@ -126,7 +143,7 @@ class CozyIcon(gtk.StatusIcon):
     def __show_message(self, title, message):
         menu = gtk.Menu()
         (x, y, p) = gtk.status_icon_position_menu(menu, self)
-        self.notification_service.Notify("", 0, "", title, message, list(), {'x': x, 'y': y}, -1)
+        self.notification_service.Notify("", 12, "", title, message, list(), {'x': x, 'y': y}, -1)
 
     def delete_event(self, widget, event):
         return False
@@ -155,6 +172,9 @@ class CozyIcon(gtk.StatusIcon):
                 message = "Whenever you would like to back up your data, click on the Symbol."
             self.__show_message("Finished Cozy Configuration", message)
 
+    def on_about(self, widget):
+        print 'FIXME: make about dialog'
+
     def on_exit(self, widget):
         self.mainloop.quit()
 
@@ -181,11 +201,11 @@ class CozyIcon(gtk.StatusIcon):
         self.restore_control_center.go_to_present()
         self.restore_frontend = None
 
-    def on_popup_menu(self, button, activate_time):
-        self.__show_popup_menu(activate_time)
+    def __on_popup_left_click_menu(self):
+        self.left_click_menu.popup(None, None, gtk.status_icon_position_menu, 0, gtk.get_current_event_time(), self)
 
-    def __show_popup_menu(self, activation_time=0):
-        self.menu.popup(None, None, gtk.status_icon_position_menu, 0, activation_time, self)
+    def __on_popup_right_click_menu(self, button, activate_time):
+        self.right_click_menu.popup(None, None, gtk.status_icon_position_menu, 0, gtk.get_current_event_time(), self)
 
 def main():
     gobject.threads_init() #@UndefinedVariable
