@@ -35,6 +35,9 @@ class LocationManager(object):
         self.system_bus = system_bus
 
     def get_backup_location(self, config):
+        if config.backup_location_identifier is None:
+            return NoneBackupLocation()
+
         if config.backup_location_type == 'absolute_path':
             return PathBasedBackupLocation(config.backup_location_identifier)
         elif config.backup_location_type == 'removeable_volume':

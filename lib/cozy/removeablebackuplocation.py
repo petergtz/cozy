@@ -62,6 +62,13 @@ class RemoveableBackupLocation(BackupLocation):
 
         return path_join(mount_point, self.rel_path)
 
+    def volume_label(self):
+        manager = self.system_bus.get_object('org.freedesktop.Hal', '/org/freedesktop/Hal/Manager')
+        devices = manager.FindDeviceStringMatch('info.udi', self.uuid, dbus_interface='org.freedesktop.Hal.Manager')
+        [device_name] = devices
+        device = self.system_bus.get_object('org.freedesktop.Hal', device_name)
+        return device.GetPropertyString('volume.label', dbus_interface='org.freedesktop.Hal.Device')
+
 
     def is_available(self):
         manager = self.system_bus.get_object('org.freedesktop.Hal', '/org/freedesktop/Hal/Manager')

@@ -88,7 +88,8 @@ class ConfigMediator:
                 self.temp_radio.set_active(True)
                 if identifier is not None:
                     uuid, rel_path = identifier.split(':')
-                    self.volume_name_label.set_text(uuid)
+                    backup_location = RemoveableBackupLocation(dbus.SystemBus(), uuid, rel_path)
+                    self.volume_name_label.set_text(backup_location.volume_label())
                     self.relative_path_label.set_text(rel_path)
                 else:
                     self.volume_name_label.set_text('Not configured')
@@ -157,7 +158,7 @@ class ConfigMediator:
         if dlg.run() == gtk.RESPONSE_OK:
             backup_location = RemoveableBackupLocation(dbus.SystemBus(), arbitrary_path=dlg.get_filename())
             self.config.backup_location_identifier = backup_location.serialize()
-            self.volume_name_label.set_text(backup_location.uuid)
+            self.volume_name_label.set_text(backup_location.volume_label())
             self.relative_path_label.set_text(backup_location.rel_path)
         dlg.destroy()
 
@@ -214,9 +215,9 @@ class ConfigMediator:
 
     def destroy(self, widget, data=None):
         self.configuration_window.hide()
-
-        self.config.write()
-        self.__react_on_config_changes()
+        if self.config.changed():
+            self.config.write()
+            self.__react_on_config_changes()
 
         self.return_func()
 
