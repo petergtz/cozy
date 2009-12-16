@@ -43,6 +43,7 @@ class TestFileSystem(unittest.TestCase):
     def setUp(self):
         self.mock_os = MockOS(['/path/to/mountpoint', '/path/to/mountpoint/rel_path', '/path/to' ])
         cozy.filesystem.subprocess.call = stubbed_call
+        cozy.filesystem.time.sleep = stubbed_call
 #
     def test_init_delete(self):
         self.filesystem = cozy.filesystem.FileSystem('/path/to/mountpoint', self.mock_os)

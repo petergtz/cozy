@@ -43,12 +43,12 @@ class CozyFSBackupStubbed(cozy.cozyfsbackup.CozyFSBackup):
 
     def _get_base_version_of(self, version):
         if self.versions.index(version) == len(self.versions) - 1:
-            return None
+            return self.VERSION_NONE
         return self.versions[self.versions.index(version) + 1]
 
     def _get_version_with(self, base_version):
         if self.versions.index(base_version) == 0:
-            return None
+            return self.VERSION_PRESENT
         return self.versions[self.versions.index(base_version) - 1]
 
 def stub(*args):
@@ -89,10 +89,26 @@ class FakeDBFactory(object):
 
 COZYFS_PATH = 'cozyfs.py'
 
+class MockMtabFile(object):
+    def read(self):
+        return '/a/tempfile/generated/dir/2009-02-14_00-31-30'
+
+    def close(self):
+        pass
+
+def mockOpen(filename, filemode):
+    return MockMtabFile()
+
+def mockIsMount(path):
+    return True
+
+cozy.cozyfsbackup.open = mockOpen
+cozy.cozyfsbackup.os.path.ismount = mockIsMount
+
+
 class TestCozyFSBackup(unittest.TestCase):
 
     def setUp(self):
-        cozy.cozyfsbackup.sleep = stub
         self.fake_db_factory = FakeDBFactory
         self.subprocess = MockSubprocessModule()
         self.subprocess.returncode = 0
@@ -120,7 +136,7 @@ class TestCozyFSBackup(unittest.TestCase):
         filesystem._FileSystem__remove_mount_point_dir = stub
 
         self.expected_mount_point = '/a/tempfile/generated/dir/2009-02-14_00-31-30'
-        self.expected_mount_command = COZYFS_PATH + ' /a/tempfile/generated/dir/2009-02-14_00-31-30 -o target_dir=/the/backup/path,backup_id=12345,version=1234567890 -f'
+        self.expected_mount_command = COZYFS_PATH + ' /the/backup/path /a/tempfile/generated/dir/2009-02-14_00-31-30 -b 12345 -v 1234567890'
 
         self.assertEqual(self.subprocess.mock_process.execute_string, 'Executing: ' + self.expected_mount_command)
         self.assertEqual(self.backup.mount_point_to_make, self.expected_mount_point)
@@ -137,7 +153,7 @@ class TestCozyFSBackup(unittest.TestCase):
         filesystem._FileSystem__remove_mount_point_dir = stub
 
         self.expected_mount_point = '/a/tempfile/generated/dir/2009-02-14_00-31-30'
-        self.expected_mount_command = COZYFS_PATH + ' /a/tempfile/generated/dir/2009-02-14_00-31-30 -o target_dir=/the/backup/path,backup_id=12345,version=1234567890,ro -f'
+        self.expected_mount_command = COZYFS_PATH + ' /the/backup/path /a/tempfile/generated/dir/2009-02-14_00-31-30 -b 12345 -v 1234567890 -r'
 
         self.assertEqual(self.subprocess.mock_process.execute_string, 'Executing: ' + self.expected_mount_command)
         self.assertEqual(self.backup.mount_point_to_make, self.expected_mount_point)
@@ -147,7 +163,7 @@ class TestCozyFSBackup(unittest.TestCase):
 
     def test_clone(self):
         self.backup.clone(1234567890)
-        self.assertEqual(self.subprocess.execute_string, 'Executing: cozyfssnapshot.py /the/backup/path 12345 1234567890')
+        self.assertEqual(self.subprocess.execute_string, 'Executing: cozyfssnapshot.py /the/backup/path 12345 -b 1234567890')
 
     def test_get_previous_versions(self):
 #        versions = [9, 8, 7, 6, 5, 4, 3, 2, 1]
@@ -160,16 +176,16 @@ class TestCozyFSBackup(unittest.TestCase):
 #        dummy_result.result = [versions[0]]
 #        self.backup.db.execute = lambda query, params: dummy_result
 
-        self.assertEquals(self.backup.get_previous_versions(None), [9, 8, 7, 6, 5, 4, 3, 2, 1])
+        self.assertEquals(self.backup.get_previous_versions(self.backup.VERSION_PRESENT), [9, 8, 7, 6, 5, 4, 3, 2, 1])
         self.assertEquals(self.backup.get_previous_versions(9), [8, 7, 6, 5, 4, 3, 2, 1])
         self.assertEquals(self.backup.get_previous_versions(6), [5, 4, 3, 2, 1])
         self.assertEquals(self.backup.get_previous_versions(1), [])
 
     def test_get_next_versions(self):
-        self.assertEquals(self.backup.get_next_versions(None), [])
-        self.assertEquals(self.backup.get_next_versions(1), [2, 3, 4, 5, 6, 7, 8, 9, None])
-        self.assertEquals(self.backup.get_next_versions(5), [6, 7, 8, 9, None])
-        self.assertEquals(self.backup.get_next_versions(9), [None])
+        self.assertEquals(self.backup.get_next_versions(self.backup.VERSION_PRESENT), [])
+        self.assertEquals(self.backup.get_next_versions(1), [2, 3, 4, 5, 6, 7, 8, 9, self.backup.VERSION_PRESENT])
+        self.assertEquals(self.backup.get_next_versions(5), [6, 7, 8, 9, self.backup.VERSION_PRESENT])
+        self.assertEquals(self.backup.get_next_versions(9), [self.backup.VERSION_PRESENT])
 
     def test_get_file_update_strategy(self):
         class DummyFileSystem:
