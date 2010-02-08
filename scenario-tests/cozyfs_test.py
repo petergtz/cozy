@@ -107,7 +107,7 @@ def __handle_return_code_of(process):
 def snapshot(target_dir, backup_id, based_on_version=None):
     cmdline = [SNAPSHOT_PATH, target_dir, str(backup_id)]
     if based_on_version is not None:
-        cmdline.append(str(based_on_version))
+        cmdline.extend(['-b', str(based_on_version)])
     print '### SNAPSHOTTING: ' + ' '.join(cmdline)
     try:
         process = subprocess.Popen(cmdline, stdout=subprocess.PIPE)

@@ -102,13 +102,10 @@ def __handle_return_code_of(process):
 
 
 
-
-
-
 def snapshot(target_dir, backup_id, based_on_version=None):
     cmdline = [SNAPSHOT_PATH, target_dir, str(backup_id)]
     if based_on_version is not None:
-        cmdline.append(str(based_on_version))
+        cmdline.extend(['-b', str(based_on_version)])
     print '### SNAPSHOTTING: ' + ' '.join(cmdline)
     try:
         process = subprocess.Popen(cmdline, stdout=subprocess.PIPE)
@@ -410,6 +407,9 @@ def remove_cozyfs(target_dir, backup_id):
 
 mountpath = '/tmp/cozy-TestCase'
 
+def binary_diffs_equal(expected, actual):
+    return expected[-50:] == actual[-50:]
+
 def assert_file_in_pool_is_diff(file, original, new):
     filename_in_pool = md5sum(file)
     with open(os.path.join(TARGET_DIR, 'FilePool', filename_in_pool), 'rb') as file_in_pool:
@@ -422,7 +422,22 @@ def assert_file_in_pool_is_diff(file, original, new):
         expected_content = filehandle_expected.read()
         expected_size = len(expected_content)
     os.remove(filename_expected)
-    if abs(expected_size - size_of_file_in_pool) > 100:
+    if not binary_diffs_equal(expected_content, content_of_file_in_pool):
+#    if abs(expected_size - size_of_file_in_pool) > 120:
+        print >> sys.stderr, "Expected content:"
+        for c in expected_content:
+            if ord(c) < 32 or ord(c) > 127:
+                sys.stderr.write("*")
+            else:
+                sys.stderr.write(c)
+        print >> sys.stderr
+        print >> sys.stderr, "Actual content:"
+        for c in content_of_file_in_pool:
+            if ord(c) < 32 or ord(c) > 127:
+                sys.stderr.write("*")
+            else:
+                sys.stderr.write(c)
+        print >> sys.stderr
         sys.exit('### FAILED file in pool is not a diff ' + file)
     else:
         print '### PASSED file in pool is diff', file
