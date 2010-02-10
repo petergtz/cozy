@@ -28,6 +28,7 @@ fuse.fuse_python_api = (0, 2)
 import errno
 
 import os
+from os.path import join as path_join, split as path_split, basename as path_basename, dirname as path_dirname
 import shutil
 import sqlite3
 
@@ -223,7 +224,7 @@ class NodesRepository(object):
 
     def insert(self, node):
         node.node_id = self.__get_new_node_id()
-        dirname, basename = os.path.split(node.path)
+        dirname, basename = path_split(node.path)
         parent_node = self.node_from_path(dirname)
         query = 'INSERT INTO Nodes (backup_id,version,nodename,node_id,parent_node_id, inode_number) VALUES (?,?,?,?,?,?)'
         self.storage.db_execute(query, (self.backup_id, self.versions[0], basename, node.node_id, parent_node.node_id, node.inode_number))
@@ -247,7 +248,7 @@ class NodesRepository(object):
         parent_node_id = '0'
         built_path = '/'
         for nodename in path.split('/')[1:-1]:
-            built_path = os.path.join(built_path, nodename)
+            built_path = path_join(built_path, nodename)
             if self.cached_nodes.has_key(built_path):
                 parent_node_id = str(self.cached_nodes[built_path].node_id)
             else:
@@ -259,7 +260,7 @@ class NodesRepository(object):
 
         query = "select node_id, inode_number from Nodes where " + \
                          self.__backup_id_versions_where_statement('Nodes') + \
-                         " group by node_id having nodename='" + os.path.basename(path) + \
+                         " group by node_id having nodename='" + path_basename(path) + \
                          "' and parent_node_id=(" + parent_node_id + ") order by version desc"
         row = self.storage.db_execute(query).fetchone()
         if row is None:
@@ -271,7 +272,7 @@ class NodesRepository(object):
         return " (" + table_name + ".backup_id = " + self.backup_id + " AND (" + (table_name + ".version = ") + (" or " + table_name + ".version = ").join(map(str, self.versions)) + ") ) "
 
     def update_node(self, node, old_path):
-        basename = os.path.basename(node.path)
+        basename = path_basename(node.path)
         if self.__has_current_node(node.node_id):
             self.storage.db_execute("update Nodes set nodename = ?, parent_node_id = ? where node_id = ? and backup_id = ? and version = ?", (basename, node.parent_node_id, node.node_id, self.backup_id, self.versions[0]))
         else:
@@ -380,9 +381,9 @@ class OpenFileInReadWriteMode(object):
         self.file_content_strategy = file_content_strategy
 
         self.filename = 'tmp/' + data_path + time_string()
-        if mode == 'write':
+        if mode == os.O_WRONLY:
             self.file_handle = self.storage.open_file(self.filename, 'w')
-        elif mode == 'readwrite':
+        elif mode == os.O_RDWR:
             data_path_deps_chain = DataPathDepChain(storage, data_path)
             if data_path_deps_chain.data_path_is_diff():
                 data_path_deps_chain.apply_patches_and_save_as(self.filename)
@@ -547,9 +548,9 @@ class ConsistenceStorage(object):
         assert path.startswith('tmp/') or path.startswith('perm/'), \
                "Programming error: filename must start with either tmp or perm"
         if path.startswith('tmp/'):
-            return os.path.join(self.devdir, 'Tmp', path.replace('tmp/', ''))
+            return path_join(self.devdir, 'Tmp', path.replace('tmp/', ''))
         else:
-            return os.path.join(self.devdir, 'FilePool', path.replace('perm/', ''))
+            return path_join(self.devdir, 'FilePool', path.replace('perm/', ''))
 
     def file_size_of(self, path):
         return os.stat(self.real_path(path))[stat.ST_SIZE]
@@ -590,7 +591,7 @@ class CozyFS(fuse.Fuse):
 
     def __create_lock_file_if_not_readonly(self):
         if self.readonly == False:
-            self.lockfile = os.path.join(self.device_dir, 'lock')
+            self.lockfile = path_join(self.device_dir, 'lock')
             if os.path.exists(self.lockfile):
                 sys.stderr.write("Error: Filesystem is already mounted. If not, please remove " + self.lockfile + " manually and try again.\n")
                 exit(4)
@@ -662,7 +663,7 @@ class CozyFS(fuse.Fuse):
         st.st_nlink = 1 # FIXME: get number of links from DB
 # FIXME: this seems to be quite a mess with all that symlink stuff! Not sure if the current way is the correct way!
 #        data_path = self.__get_data_path_from_path(path)
-#        abs_data_path = os.path.normpath(os.path.join(os.path.dirname(path), data_path))
+#        abs_data_path = os.path.normpath(path_join(path_dirname(path), data_path))
 #        st.st_size = len(data_path)
         st.st_size = int(attributes['size'])
 #        attr = self.getattr(abs_data_path)
@@ -714,7 +715,7 @@ class CozyFS(fuse.Fuse):
     def mknod(self, path, mode, dev): #TODO: if file already exists, only change file time. DO NOT empty file!
         self.log.debug("PARAMS: path = '%s, mode = %s, dev = %s", path, mode, dev)
         self.__assert_readwrite()
-        empty_file_path = os.path.join(self.device_dir, 'FilePool', MD5SUM_FOR_EMPTY_STRING)
+        empty_file_path = path_join(self.device_dir, 'FilePool', MD5SUM_FOR_EMPTY_STRING)
         if not os.path.exists(empty_file_path):
             os.mknod(empty_file_path)
         return self.__mknod_or_dir(path, mode, FILE, MD5SUM_FOR_EMPTY_STRING)
@@ -773,7 +774,7 @@ class CozyFS(fuse.Fuse):
         self.__assert_readwrite()
 
         node = self.nodes.node_from_path(old_path)
-        new_parent_node = self.nodes.node_from_path(os.path.dirname(new_path))
+        new_parent_node = self.nodes.node_from_path(path_dirname(new_path))
 
         node.parent_node_id = new_parent_node.node_id
         node.path = new_path
@@ -830,11 +831,9 @@ class CozyFS(fuse.Fuse):
         if flags & os.O_WRONLY or flags & os.O_RDWR:
             self.__assert_readwrite()
             if flags & os.O_WRONLY:
-                mode = 'write'
+                mode = os.O_WRONLY
             elif flags & os.O_RDWR:
-                mode = 'readwrite'
-            else:
-                assert False, 'Unknown mode'
+                mode = os.O_RDWR
             filediff_deps = FileDiffDependecies(self.storage)
             if self.__has_base_nodes(node.node_id):
                 previous_data_path = self.inodes.previous_data_path_version_of_inode(inode)
@@ -981,7 +980,7 @@ def main(argv=sys.argv[1:]):
     input_params = parse_commandline(argv)
 
     initLogger()
-    db = connect_to_database(os.path.join(input_params.device_dir, DBFILE))
+    db = connect_to_database(path_join(input_params.device_dir, DBFILE))
     storage = ConsistenceStorage(db, input_params.device_dir)
 
     FS = CozyFS(storage, input_params, fetch_mp=False, usage='cozyfs.py <device-dir> <mount-point> [<options>]')
