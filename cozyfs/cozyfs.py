@@ -294,25 +294,15 @@ class NodesRepository(object):
         count = self.storage.db_execute("select count(*) from Nodes where inode_number=?", (inode.inode_number,)).fetchone()[0]
         return count == 0
 
-class DataPathDepChain(object):
-    def __init__(self, storage, data_path):
+class PatchApplier(object):
+    def __init__(self, storage):
         self.storage = storage
-        self.log = logging.getLogger('cozyfs')
-        data_path_dep_chain = [data_path]
-        while True:
-            row = self.storage.db_execute("SELECT based_on_data_path FROM FileDiffDependencies WHERE data_path = ?", (data_path,)).fetchone()
-            if row is None or row[0] is None or row[0] == '':
-                break
-            else:
-                data_path = row[0]
-                data_path_dep_chain.append(data_path)
-        self.data_path_dep_chain = data_path_dep_chain
 
-    def data_path_is_diff(self):
-        return len(self.data_path_dep_chain) != 1
+    def data_path_is_diff(self, data_path_dep_chain):
+        return len(data_path_dep_chain) != 1
 
-    def apply_patches_and_save_as(self, target_path):
-        reverse_data_path_dep_chain = self.data_path_dep_chain[:]
+    def apply_patches_and_save_as(self, target_path, data_path_dep_chain):
+        reverse_data_path_dep_chain = data_path_dep_chain[:]
         reverse_data_path_dep_chain.reverse()
 
         real_base_path = self.storage.real_path('perm/' + reverse_data_path_dep_chain[0])
@@ -347,14 +337,15 @@ def time_string():
 
 
 class OpenFileInReadMode(object):
-    def __init__(self, storage, data_path):
+    def __init__(self, storage, data_path, file_diff_dependencies):
         self.storage = storage
         self.direct_io = True  # since I don't know how direct_io works, I'm enabling it.
         self.keep_cache = True # unfortunately it's nowhere documented in FUSE
-        data_path_dep_chain = DataPathDepChain(storage, data_path)
-        if data_path_dep_chain.data_path_is_diff():
+        data_path_dep_chain = file_diff_dependencies.create_dependency_chain(data_path)
+        applier = PatchApplier(storage)
+        if applier.data_path_is_diff(data_path_dep_chain):
             self.filename = 'tmp/' + data_path + '.' + time_string()
-            data_path_dep_chain.apply_patches_and_save_as(self.filename)
+            applier.apply_patches_and_save_as(self.filename, data_path_dep_chain)
         else:
             self.filename = 'perm/' + data_path
         self.file_handle = self.storage.open_file(self.filename, 'r')
@@ -373,7 +364,7 @@ class OpenFileInReadMode(object):
                 (self.filename, self.file_handle)
 
 class OpenFileInReadWriteMode(object):
-    def __init__(self, storage, data_path, mode, file_content_strategy):
+    def __init__(self, storage, data_path, mode, file_content_strategy, file_diff_dependencies):
         self.direct_io = True  # since I don't know how direct_io works, I'm enabling it.
         self.keep_cache = True # unfortunately it's nowhere documented in FUSE
         self.storage = storage
@@ -384,9 +375,10 @@ class OpenFileInReadWriteMode(object):
         if mode == os.O_WRONLY:
             self.file_handle = self.storage.open_file(self.filename, 'w')
         elif mode == os.O_RDWR:
-            data_path_deps_chain = DataPathDepChain(storage, data_path)
-            if data_path_deps_chain.data_path_is_diff():
-                data_path_deps_chain.apply_patches_and_save_as(self.filename)
+            data_path_deps_chain = file_diff_dependencies.create_dependency_chain(data_path)
+            applier = PatchApplier(storage)
+            if applier.data_path_is_diff(data_path_deps_chain):
+                applier.apply_patches_and_save_as(self.filename, data_path_deps_chain)
             else:
                 self.storage.copy_file('perm/' + data_path, self.filename)
             self.file_handle = self.storage.open_file(self.filename, 'r+')
@@ -418,7 +410,7 @@ class OpenFileInReadWriteMode(object):
         return "<OpenFileInReadWriteMode: original_filename: REFACTORED, filename: %s , file_handle: %s>" % \
                 (self.filename, self.file_handle)
 
-class FileDiffDependecies(object):
+class FileDiffDependencies(object):
     def __init__(self, storage):
         self.storage = storage
 
@@ -432,6 +424,17 @@ class FileDiffDependecies(object):
     def insert(self, data_path, based_on_data_path):
         self.storage.db_execute('INSERT INTO FileDiffDependencies (based_on_data_path, data_path) VALUES (?, ?)',
                                 (based_on_data_path, data_path))
+
+    def create_dependency_chain(self, data_path):
+        data_path_dep_chain = [data_path]
+        while True:
+            row = self.storage.db_execute("SELECT based_on_data_path FROM FileDiffDependencies WHERE data_path = ?", (data_path,)).fetchone()
+            if row is None or row[0] is None or row[0] == '':
+                break
+            else:
+                data_path = row[0]
+                data_path_dep_chain.append(data_path)
+        return data_path_dep_chain
 
 
 class PlainFileContentStrategy(object):
@@ -454,16 +457,17 @@ class PatchedFileContentStrategy(object):
         self.filediff_deps = filediff_deps
         self.data_path = data_path
 
-        self.previous_version_dep_chain = DataPathDepChain(storage, data_path_of_previous_version)
-        if self.previous_version_dep_chain.data_path_is_diff():
+        self.previous_version_dep_chain = filediff_deps.create_dependency_chain(data_path_of_previous_version)
+        applier = PatchApplier(storage)
+        if applier.data_path_is_diff(self.previous_version_dep_chain):
             self.original_filename = 'tmp/%s.orig.%s' % (data_path_of_previous_version, time_string())
-            self.previous_version_dep_chain.apply_patches_and_save_as(self.original_filename)
+            applier.apply_patches_and_save_as(self.original_filename, self.previous_version_dep_chain)
         else:
             self.original_filename = 'perm/' + data_path_of_previous_version
 
 
     def flush(self, new_data_path, filename):
-        if self.previous_version_dep_chain.data_path_dep_chain[0] != new_data_path:
+        if self.previous_version_dep_chain[0] != new_data_path:
             diff_filename = 'tmp/%s.diff.%s' % (new_data_path, time_string())
             self.__create_diff(self.original_filename, filename, diff_filename)
             size_of_diff = self.storage.file_size_of(diff_filename)
@@ -485,7 +489,7 @@ class PatchedFileContentStrategy(object):
                     self.filediff_deps.insert(new_data_path, None)
                 else:
                     self.storage.move_file(diff_filename, 'perm/' + new_data_path)
-                    self.filediff_deps.insert(new_data_path, self.previous_version_dep_chain.data_path_dep_chain[0])
+                    self.filediff_deps.insert(new_data_path, self.previous_version_dep_chain[0])
 
     def __create_diff(self, original, new, diff):
         original = self.storage.real_path(original)
@@ -574,6 +578,7 @@ class CozyFS(fuse.Fuse):
 
         self.inodes = InodesRepository(self.storage, self.versions, self.backup_id)
         self.nodes = NodesRepository(self.storage, self.versions, self.backup_id)
+        self.file_diff_dependencies = FileDiffDependencies(self.storage)
 
     def __init_version(self, version):
         if version is None:
@@ -834,16 +839,15 @@ class CozyFS(fuse.Fuse):
                 mode = os.O_WRONLY
             elif flags & os.O_RDWR:
                 mode = os.O_RDWR
-            filediff_deps = FileDiffDependecies(self.storage)
             if self.__has_base_nodes(node.node_id):
                 previous_data_path = self.inodes.previous_data_path_version_of_inode(inode)
-                file_content_strategy = PatchedFileContentStrategy(self.storage, filediff_deps, inode['data_path'], previous_data_path)
+                file_content_strategy = PatchedFileContentStrategy(self.storage, self.file_diff_dependencies, inode['data_path'], previous_data_path)
             else:
-                file_content_strategy = PlainFileContentStrategy(self.storage, filediff_deps)
+                file_content_strategy = PlainFileContentStrategy(self.storage, self.file_diff_dependencies)
 
-            return OpenFileInReadWriteMode(self.storage, inode['data_path'], mode, file_content_strategy)
+            return OpenFileInReadWriteMode(self.storage, inode['data_path'], mode, file_content_strategy, self.file_diff_dependencies)
         else: # apparently there is nothing like a "read" flag
-            return OpenFileInReadMode(self.storage, inode['data_path'])
+            return OpenFileInReadMode(self.storage, inode['data_path'], self.file_diff_dependencies)
 
 
     def read(self, path, length, offset, fH):
