@@ -871,7 +871,6 @@ class CozyFS(fuse.Fuse):
                     return - 1 # TODO: return proper return value!
         return self.unlink(path)
 
-
     def open(self, path, flags):
         self.log.debug("PARAMS: path = '%s', flags = %s", path, flags2string(flags))
         node = self.nodes.node_from_path(path)
@@ -880,17 +879,12 @@ class CozyFS(fuse.Fuse):
             self.__assert_readwrite()
             file_content_strategy = FileContentStrategyFactory(self.nodes, self.inodes, self.storage,
                                                                self.file_diff_dependencies).createFileContentStrategy(node)
-
             if flags & os.O_WRONLY:
                 return OpenFileInWriteMode(self.storage, inode['data_path'], file_content_strategy)
             elif flags & os.O_RDWR:
                 return OpenFileInReadWriteMode(self.storage, inode['data_path'], self.file_diff_dependencies, file_content_strategy)
-
-
-
         else: # apparently there is nothing like a "read" flag
             return OpenFileInReadMode(self.storage, inode['data_path'], self.file_diff_dependencies)
-
 
     def read(self, path, length, offset, fH):
         buf = fH.read(length, offset)
@@ -903,8 +897,7 @@ class CozyFS(fuse.Fuse):
     def flush(self, path, fh):
         self.log.debug("PARAMS: path = '%s', fH = %s", path, fh)
         try:
-            if (isinstance(fh, OpenFileInReadWriteMode) or
-                isinstance(fh, OpenFileInWriteMode)):
+            if (isinstance(fh, OpenFileInReadWriteMode) or isinstance(fh, OpenFileInWriteMode)):
                 node = self.nodes.node_from_path(path)
                 inode = self.inodes.inode_from_inode_number(node.inode_number)
                 old_data_path = inode['data_path']
