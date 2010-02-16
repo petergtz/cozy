@@ -286,6 +286,10 @@ class NodesRepository(object):
         row = self.storage.db_execute("select count(*) from Nodes where node_id = ? and backup_id = ? and version = ?", (node_id, self.backup_id, self.versions[0])).fetchone()
         return row[0]
 
+    def node_has_base_nodes(self, node_id):
+        cursor = self.storage.db_execute("select count(*) from Nodes where node_id = ? and version <> ? and " + self.__backup_id_versions_where_statement('Nodes'), (node_id, self.versions[0]))
+        return cursor.fetchone()[0]
+
     def delete_node(self, node):
         self.storage.db_execute("delete from Nodes where backup_id=? and version=? and node_id=?", (self.backup_id, self.versions[0], node.node_id))
         del self.cached_nodes[node.path]
@@ -297,9 +301,6 @@ class NodesRepository(object):
 class PatchApplier(object):
     def __init__(self, storage):
         self.storage = storage
-
-    def data_path_is_diff(self, data_path_dep_chain):
-        return len(data_path_dep_chain) != 1
 
     def apply_patches_and_save_as(self, target_path, data_path_dep_chain):
         reverse_data_path_dep_chain = data_path_dep_chain[:]
@@ -336,16 +337,22 @@ def time_string():
     return '_TIME_STAMP_' + str(time.time()) + '_RANDOM_' + str(random.randint(0, 100000))
 
 
-class OpenFileInReadMode(object):
-    def __init__(self, storage, data_path, file_diff_dependencies):
+class BasicOpenFile(object):
+    def __init__(self, storage):
         self.storage = storage
         self.direct_io = True  # since I don't know how direct_io works, I'm enabling it.
         self.keep_cache = True # unfortunately it's nowhere documented in FUSE
-        data_path_dep_chain = file_diff_dependencies.create_dependency_chain(data_path)
-        applier = PatchApplier(storage)
-        if applier.data_path_is_diff(data_path_dep_chain):
+
+
+
+class OpenFileInReadMode(BasicOpenFile):
+    def __init__(self, storage, data_path, file_diff_dependencies):
+        BasicOpenFile.__init__(self, storage)
+
+        data_path_dep_chain = file_diff_dependencies.content_dependency_chain(data_path)
+        if file_diff_dependencies.is_diff(data_path):
             self.filename = 'tmp/' + data_path + '.' + time_string()
-            applier.apply_patches_and_save_as(self.filename, data_path_dep_chain)
+            PatchApplier(storage).apply_patches_and_save_as(self.filename, data_path_dep_chain)
         else:
             self.filename = 'perm/' + data_path
         self.file_handle = self.storage.open_file(self.filename, 'r')
@@ -363,31 +370,28 @@ class OpenFileInReadMode(object):
         return "<OpenFileInReadMode: filename: %s , file_handle: %s>" % \
                 (self.filename, self.file_handle)
 
-class OpenFileInReadWriteMode(object):
-    def __init__(self, storage, data_path, mode, file_content_strategy, file_diff_dependencies):
-        self.direct_io = True  # since I don't know how direct_io works, I'm enabling it.
-        self.keep_cache = True # unfortunately it's nowhere documented in FUSE
+class FileContentStrategyFactory(object):
+    def __init__(self, nodes, inodes, storage, file_diff_dependencies):
+        self.nodes = nodes
+        self.inodes = inodes
         self.storage = storage
+        self.file_diff_dependencies = file_diff_dependencies
+
+    def createFileContentStrategy(self, node):
+        inode = self.inodes.inode_from_inode_number(node.inode_number)
+        if self.nodes.node_has_base_nodes(node.node_id):
+            previous_data_path = self.inodes.previous_data_path_version_of_inode(inode)
+            return PatchedFileContentStrategy(self.storage, self.file_diff_dependencies, inode['data_path'], previous_data_path)
+        else:
+            return PlainFileContentStrategy(self.storage, self.file_diff_dependencies)
+
+class OpenFileInWriteMode(BasicOpenFile):
+    def __init__(self, storage, data_path, file_diff_dependencies, file_content_strategy):
+        BasicOpenFile.__init__(self, storage)
         self.data_path = data_path
         self.file_content_strategy = file_content_strategy
-
         self.filename = 'tmp/' + data_path + time_string()
-        if mode == os.O_WRONLY:
-            self.file_handle = self.storage.open_file(self.filename, 'w')
-        elif mode == os.O_RDWR:
-            data_path_deps_chain = file_diff_dependencies.create_dependency_chain(data_path)
-            applier = PatchApplier(storage)
-            if applier.data_path_is_diff(data_path_deps_chain):
-                applier.apply_patches_and_save_as(self.filename, data_path_deps_chain)
-            else:
-                self.storage.copy_file('perm/' + data_path, self.filename)
-            self.file_handle = self.storage.open_file(self.filename, 'r+')
-        else:
-            assert False, 'Wrong mode as Parameter'
-
-    def read(self, length, offset):
-        self.file_handle.seek(offset)
-        return self.file_handle.read(length)
+        self.file_handle = self.storage.open_file(self.filename, 'w')
 
     def write(self, buf, offset):
         self.file_handle.seek(offset)
@@ -407,34 +411,71 @@ class OpenFileInReadWriteMode(object):
         self.storage.remove_file(self.filename)
 
     def __str__(self):
-        return "<OpenFileInReadWriteMode: original_filename: REFACTORED, filename: %s , file_handle: %s>" % \
+        return "<OpenFileInWriteMode: filename: %s , file_handle: %s>" % \
                 (self.filename, self.file_handle)
+
+
+class OpenFileInReadWriteMode(OpenFileInReadMode, OpenFileInWriteMode):
+    def __init__(self, storage, data_path, file_diff_dependencies, file_content_strategy):
+        BasicOpenFile.__init__(self, storage)
+        self.data_path = data_path
+        self.file_content_strategy = file_content_strategy
+        self.filename = 'tmp/' + data_path + time_string()
+        data_path_deps_chain = file_diff_dependencies.content_dependency_chain(data_path)
+        if file_diff_dependencies.is_diff(data_path):
+            PatchApplier(storage).apply_patches_and_save_as(self.filename, data_path_deps_chain)
+        else:
+            self.storage.copy_file('perm/' + data_path, self.filename)
+        self.file_handle = self.storage.open_file(self.filename, 'r+')
+
+    def __str__(self):
+        return "<OpenFileInReadWriteMode: filename: %s , file_handle: %s>" % \
+                (self.filename, self.file_handle)
+
+    def close(self):
+        OpenFileInWriteMode.close(self)
 
 class FileDiffDependencies(object):
     def __init__(self, storage):
         self.storage = storage
+        self.cached_data_path_dep_chain = {}
 
     def data_path_exists_already(self, data_path):
         return self.storage.db_execute('SELECT count(*) FROM FileDiffDependencies WHERE data_path = ?', (data_path,)).fetchone()[0]
 
     def update(self, data_path, based_on_data_path):
+        self.cached_data_path_dep_chain = {}
         self.storage.db_execute('UPDATE FileDiffDependencies SET based_on_data_path = ? WHERE data_path = ?',
                                 (based_on_data_path, data_path))
 
     def insert(self, data_path, based_on_data_path):
+        self.cached_data_path_dep_chain = {}
         self.storage.db_execute('INSERT INTO FileDiffDependencies (based_on_data_path, data_path) VALUES (?, ?)',
                                 (based_on_data_path, data_path))
 
-    def create_dependency_chain(self, data_path):
-        data_path_dep_chain = [data_path]
-        while True:
-            row = self.storage.db_execute("SELECT based_on_data_path FROM FileDiffDependencies WHERE data_path = ?", (data_path,)).fetchone()
-            if row is None or row[0] is None or row[0] == '':
-                break
-            else:
-                data_path = row[0]
-                data_path_dep_chain.append(data_path)
-        return data_path_dep_chain
+    def content_dependency_chain(self, data_path):
+        self.cached_data_path_dep_chain = {}
+        if not self.cached_data_path_dep_chain.has_key(data_path):
+            data_path_dep_chain = [data_path]
+            while True:
+                row = self.storage.db_execute("SELECT based_on_data_path FROM FileDiffDependencies WHERE data_path = ?", (data_path,)).fetchone()
+                if row is None or row[0] is None or row[0] == '':
+                    break
+                else:
+                    data_path = row[0]
+                    data_path_dep_chain.append(data_path)
+            self.cached_data_path_dep_chain[data_path] = data_path_dep_chain
+        return self.cached_data_path_dep_chain[data_path]
+
+    def no_path_dependent_anymore_on(self, data_path):
+        return self.storage.db_execute('SELECT count(*) FROM FileDiffDependencies WHERE based_on_data_path = ?', (data_path,)).fetchone()[0]
+
+    def delete_element(self, data_path):
+        self.cached_data_path_dep_chain = {}
+        self.storage.db_execute('DELETE FROM FileDiffDependencies WHERE data_path=?', (data_path,))
+
+    def is_diff(self, data_path):
+        return len(self.content_dependency_chain(data_path)) != 1
 
 
 class PlainFileContentStrategy(object):
@@ -457,11 +498,10 @@ class PatchedFileContentStrategy(object):
         self.filediff_deps = filediff_deps
         self.data_path = data_path
 
-        self.previous_version_dep_chain = filediff_deps.create_dependency_chain(data_path_of_previous_version)
-        applier = PatchApplier(storage)
-        if applier.data_path_is_diff(self.previous_version_dep_chain):
+        self.previous_version_dep_chain = filediff_deps.content_dependency_chain(data_path_of_previous_version)
+        if filediff_deps.is_diff(data_path_of_previous_version):
             self.original_filename = 'tmp/%s.orig.%s' % (data_path_of_previous_version, time_string())
-            applier.apply_patches_and_save_as(self.original_filename, self.previous_version_dep_chain)
+            PatchApplier(storage).apply_patches_and_save_as(self.original_filename, self.previous_version_dep_chain)
         else:
             self.original_filename = 'perm/' + data_path_of_previous_version
 
@@ -765,14 +805,6 @@ class CozyFS(fuse.Fuse):
         self.log.debug("RETURNING: path = '%s'", inode['data_path'])
         return inode['data_path']
 
-    def __has_base_nodes(self, node_id):
-        cursor = self.storage.db_execute("select count(*) from Nodes where node_id = ? and version <> ? and " + self.__backup_id_versions_where_statement('Nodes'), (node_id, self.versions[0]))
-        return cursor.fetchone()[0]
-
-    def __has_base_inodes(self, inode, attribute):
-        cursor = self.storage.db_execute('select count(*) from ' + attribute + ' where inode = ? and version <> ? and ' + self.__backup_id_versions_where_statement(attribute), (inode, self.versions[0]))
-        return cursor.fetchone()[0]
-
 
     def rename(self, old_path, new_path):
         self.log.debug("PARAMS: old_path = '%s', new_path = '%s'", old_path, new_path)
@@ -799,7 +831,8 @@ class CozyFS(fuse.Fuse):
         node = self.nodes.node_from_path(path)
         inode = self.inodes.inode_from_inode_number(node.inode_number)
 
-        if self.__has_base_nodes(node.node_id):
+        if self.nodes.node_has_base_nodes(node.node_id):
+#        if self.__has_base_nodes(node.node_id):
             old_path = node.path
             node.path = ''
             node.parent_node_id = 0
@@ -811,9 +844,9 @@ class CozyFS(fuse.Fuse):
                 file_system_object_type = inode["type"]
                 self.inodes.delete_inode(inode.inode_number)
                 if file_system_object_type == FILE:
-                    if self.inodes.data_path_not_used_anymore(data_path):
+                    if self.inodes.data_path_not_used_anymore(data_path) and self.file_diff_dependencies.no_path_dependent_anymore_on(data_path):
                         os.remove(self.device_dir + '/FilePool/' + data_path)
-                        self.storage.db_execute('DELETE FROM FileDiffDependencies WHERE data_path=?', (data_path,))
+                        self.file_diff_dependencies.delete_element(data_path)
         self.storage.commit()
         return 0
 
@@ -835,17 +868,16 @@ class CozyFS(fuse.Fuse):
         inode = self.inodes.inode_from_inode_number(node.inode_number)
         if flags & os.O_WRONLY or flags & os.O_RDWR:
             self.__assert_readwrite()
-            if flags & os.O_WRONLY:
-                mode = os.O_WRONLY
-            elif flags & os.O_RDWR:
-                mode = os.O_RDWR
-            if self.__has_base_nodes(node.node_id):
-                previous_data_path = self.inodes.previous_data_path_version_of_inode(inode)
-                file_content_strategy = PatchedFileContentStrategy(self.storage, self.file_diff_dependencies, inode['data_path'], previous_data_path)
-            else:
-                file_content_strategy = PlainFileContentStrategy(self.storage, self.file_diff_dependencies)
+            file_content_strategy = FileContentStrategyFactory(self.nodes, self.inodes, self.storage,
+                                                               self.file_diff_dependencies).createFileContentStrategy(node)
 
-            return OpenFileInReadWriteMode(self.storage, inode['data_path'], mode, file_content_strategy, self.file_diff_dependencies)
+            if flags & os.O_WRONLY:
+                return OpenFileInWriteMode(self.storage, inode['data_path'], self.file_diff_dependencies, file_content_strategy)
+            elif flags & os.O_RDWR:
+                return OpenFileInReadWriteMode(self.storage, inode['data_path'], self.file_diff_dependencies, file_content_strategy)
+
+
+
         else: # apparently there is nothing like a "read" flag
             return OpenFileInReadMode(self.storage, inode['data_path'], self.file_diff_dependencies)
 
@@ -861,7 +893,8 @@ class CozyFS(fuse.Fuse):
     def flush(self, path, fh):
         self.log.debug("PARAMS: path = '%s', fH = %s", path, fh)
         try:
-            if isinstance(fh, OpenFileInReadWriteMode):
+            if (isinstance(fh, OpenFileInReadWriteMode) or
+                isinstance(fh, OpenFileInWriteMode)):
                 node = self.nodes.node_from_path(path)
                 inode = self.inodes.inode_from_inode_number(node.inode_number)
                 old_data_path = inode['data_path']
@@ -870,18 +903,15 @@ class CozyFS(fuse.Fuse):
                     self.inodes.update_inode_in_place(node.inode_number, {'data_path': new_data_path, 'size': new_size})
 
                     if self.inodes.data_path_not_used_anymore(old_data_path) and \
-                        self.__data_path_not_used_in_filediff_deps_anymore(old_data_path):
+                        self.file_diff_dependencies.no_path_dependent_anymore_on(old_data_path):
 
                         self.storage.remove_file('perm/' + old_data_path)
-                        self.storage.db_execute('DELETE FROM FileDiffDependencies WHERE data_path=?', (old_data_path,))
+                        self.file_diff_dependencies.delete_element(old_data_path)
             self.storage.commit()
         except Exception, e:
             traceback.print_exc(file=sys.stderr)
             raise Exception(str(e))
         return 0
-
-    def __data_path_not_used_in_filediff_deps_anymore(self, data_path):
-        self.storage.db_execute('SELECT count(*) FROM FileDiffDependencies WHERE based_on_data_path = ?', (data_path,))
 
     def release(self, path, flags, fH):
         self.log.debug("PARAMS: path = '%s, flags = %s, fH = %s'", path, flags, fH)
