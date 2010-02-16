@@ -438,18 +438,15 @@ class FileDiffDependencyChain(object):
 class FileDiffDependencies(object):
     def __init__(self, storage):
         self.storage = storage
-        self.cached_data_path_dep_chain = {}
 
     def data_path_exists_already(self, data_path):
         return self.storage.db_execute('SELECT count(*) FROM FileDiffDependencies WHERE data_path = ?', (data_path,)).fetchone()[0]
 
     def update(self, data_path, based_on_data_path):
-        self.cached_data_path_dep_chain = {}
         self.storage.db_execute('UPDATE FileDiffDependencies SET based_on_data_path = ? WHERE data_path = ?',
                                 (based_on_data_path, data_path))
 
     def insert(self, data_path, based_on_data_path):
-        self.cached_data_path_dep_chain = {}
         self.storage.db_execute('INSERT INTO FileDiffDependencies (based_on_data_path, data_path) VALUES (?, ?)',
                                 (based_on_data_path, data_path))
 
@@ -460,12 +457,14 @@ class FileDiffDependencies(object):
         return self.storage.db_execute('SELECT count(*) FROM FileDiffDependencies WHERE based_on_data_path = ?', (data_path,)).fetchone()[0]
 
     def delete_element(self, data_path):
-        self.cached_data_path_dep_chain = {}
         self.storage.db_execute('DELETE FROM FileDiffDependencies WHERE data_path=?', (data_path,))
 
-    def is_diff(self, data_path):
-        return len(self.dependency_chain(data_path)) != 1
-
+    def base_of(self, data_path):
+        row = self.storage.db_execute("SELECT based_on_data_path FROM FileDiffDependencies WHERE data_path = ?", (data_path,)).fetchone()
+        if row is None or row[0] is None or row[0] == '':
+            return None
+        else:
+            return row[0]
 
 class FileContentStrategyFactory(object):
     def __init__(self, nodes, inodes, storage, file_diff_dependencies):
@@ -515,9 +514,9 @@ class PatchedFileContentStrategy(object):
         if self.data_path_of_previous_version != new_data_path:
             diff_filename = 'tmp/%s.diff.%s' % (new_data_path, time_string())
             self.__create_diff(self.original_filename, filename, diff_filename)
-            size_of_diff = self.storage.file_size_of(diff_filename)
             if self.file_diff_dependencies.data_path_exists_already(new_data_path):
                 size_of_existing_data_path = self.storage.file_size_of('perm/' + new_data_path)
+                size_of_diff = self.storage.file_size_of(diff_filename)
                 if size_of_diff < size_of_existing_data_path:
                     self.storage.move_file(diff_filename, 'perm/' + new_data_path)
                     self.file_diff_dependencies.update(new_data_path, self.data_path)
@@ -527,6 +526,7 @@ class PatchedFileContentStrategy(object):
                 else:
                     self.storage.remove_file(diff_filename)
             else:
+                size_of_diff = self.storage.file_size_of(diff_filename)
                 size_of_nondiff = self.storage.file_size_of(filename)
                 if self.__size_of_diff_is_too_big(size_of_diff, size_of_nondiff):
                     self.storage.copy_file(filename, 'perm/' + new_data_path)
@@ -837,7 +837,6 @@ class CozyFS(fuse.Fuse):
         inode = self.inodes.inode_from_inode_number(node.inode_number)
 
         if self.nodes.node_has_base_nodes(node.node_id):
-#        if self.__has_base_nodes(node.node_id):
             old_path = node.path
             node.path = ''
             node.parent_node_id = 0
@@ -849,12 +848,18 @@ class CozyFS(fuse.Fuse):
                 file_system_object_type = inode["type"]
                 self.inodes.delete_inode(inode.inode_number)
                 if file_system_object_type == FILE:
-                    if self.inodes.data_path_not_used_anymore(data_path) and self.file_diff_dependencies.no_data_path_dependent_anymore_on(data_path):
-                        os.remove(self.device_dir + '/FilePool/' + data_path)
-                        self.file_diff_dependencies.delete_element(data_path)
+                    self.__remove_data_path_recursively(data_path)
         self.storage.commit()
         return 0
 
+    def __remove_data_path_recursively(self, data_path):
+        while self.inodes.data_path_not_used_anymore(data_path) and self.file_diff_dependencies.no_data_path_dependent_anymore_on(data_path):
+            previous_data_path = self.file_diff_dependencies.base_of(data_path)
+            self.storage.remove('perm/' + data_path)
+            self.file_diff_dependencies.delete_element(data_path)
+            data_path = previous_data_path
+            if data_path is None:
+                break
 
     def rmdir(self, path): # TODO: check if this is funciton is allowd to delete all sub-"nodes"
         self.log.debug("PARAMS: path = '%s'", path)
@@ -906,12 +911,7 @@ class CozyFS(fuse.Fuse):
                 new_data_path, new_size = fh.flush()
                 if old_data_path != new_data_path:
                     self.inodes.update_inode_in_place(node.inode_number, {'data_path': new_data_path, 'size': new_size})
-                    # FIXME: should be a loop deleting recursively all based_ons
-                    if self.inodes.data_path_not_used_anymore(old_data_path) and \
-                        self.file_diff_dependencies.no_data_path_dependent_anymore_on(old_data_path):
-
-                        self.storage.remove_file('perm/' + old_data_path)
-                        self.file_diff_dependencies.delete_element(old_data_path)
+                    self.__remove_data_path_recursively(old_data_path)
             self.storage.commit()
         except Exception, e:
             traceback.print_exc(file=sys.stderr)
