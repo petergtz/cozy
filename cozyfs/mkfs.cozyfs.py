@@ -39,7 +39,7 @@ def parse_cmdline():
     return args[0], int(args[1]), options.force, options.should_create_first_version
 
 def create_dirs_if_not_existent(device_dir):
-    for dir in ['FilePool', 'Tmp']:
+    for dir in ['FilePool', 'Tmp', 'plain']:
         path = os.path.join(device_dir, dir)
         if not os.path.exists(path):
             os.mkdir(path)
@@ -54,7 +54,7 @@ def create_tables_if_not_existent(db):
 
     db.executescript("""
     CREATE TABLE IF NOT EXISTS Versions (backup_id NUMERIC, version NUMERIC, based_on_version NUMERIC);
-    CREATE TABLE IF NOT EXISTS data_path (backup_id NUMERIC, version NUMERIC, data_path TEXT, inode NUMERIC);
+    CREATE TABLE IF NOT EXISTS data_id (backup_id NUMERIC, version NUMERIC, data_id NUMERIC, inode NUMERIC);
     CREATE TABLE IF NOT EXISTS type (backup_id NUMERIC, version NUMERIC, type NUMERIC, inode NUMERIC);
     CREATE TABLE IF NOT EXISTS Nodes (backup_id NUMERIC, version NUMERIC, nodename TEXT, parent_node_id NUMERIC, node_id NUMERIC, inode_number NUMERIC);
     CREATE TABLE IF NOT EXISTS atime (atime NUMERIC, version NUMERIC, backup_id NUMERIC, inode NUMERIC);
@@ -64,7 +64,7 @@ def create_tables_if_not_existent(db):
     CREATE TABLE IF NOT EXISTS mtime (backup_id NUMERIC, version NUMERIC, inode NUMERIC, mtime NUMERIC);
     CREATE TABLE IF NOT EXISTS size (backup_id NUMERIC, version NUMERIC, inode NUMERIC, size NUMERIC);
     CREATE TABLE IF NOT EXISTS uid (backup_id NUMERIC, version NUMERIC, inode NUMERIC, uid NUMERIC);
-    CREATE TABLE IF NOT EXISTS FileDiffDependencies (data_path TEXT, based_on_data_path TEXT);
+    CREATE TABLE IF NOT EXISTS FileDiffDependencies (data_id NUMERIC, hash TEXT, based_on_hash TEXT, data_path TEXT, data_size NUMERIC);
     """)
 
     db.commit()

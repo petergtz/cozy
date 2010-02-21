@@ -258,9 +258,11 @@ def copy(source, target):
         target_content = open(target).read()
         source_content = open(source).read()
         if target_content != source_content:
-            print 'source: ', source_content
-            print
-            print 'target: ', target_content
+#            print >> sys.stderr, 'source: '
+#            binary_dump(source_content)
+#            print >> sys.stderr
+#            print >> sys.stderr, 'target: '
+#            binary_dump(target_content)
             raise Exception('compare failed: ' + source + ' ' + target)
 
 # FIXME: add size comparison here!!!
@@ -410,14 +412,21 @@ mountpath = '/tmp/cozy-TestCase'
 def binary_diffs_equal(expected, actual):
     return expected[-50:] == actual[-50:]
 
+def binary_dump(binary_data):
+    for c in binary_data:
+        if ord(c) < 32 or ord(c) > 127:
+            sys.stderr.write("*")
+        else:
+            sys.stderr.write(c)
+
 def assert_file_in_pool_is_diff(file, original, new):
-    filename_in_pool = md5sum(file)
+    filename_in_pool = md5sum(original)
     with open(os.path.join(TARGET_DIR, 'FilePool', filename_in_pool), 'rb') as file_in_pool:
         content_of_file_in_pool = file_in_pool.read()
         size_of_file_in_pool = len(content_of_file_in_pool)
 
     (fd, filename_expected) = tempfile.mkstemp()
-    subprocess.check_call(['xdelta3', '-f', '-e', '-s', original, new, filename_expected])
+    subprocess.check_call(['xdelta3', '-f', '-e', '-s', new, original, filename_expected])
     with open(filename_expected, 'rb') as filehandle_expected:
         expected_content = filehandle_expected.read()
         expected_size = len(expected_content)
@@ -425,18 +434,10 @@ def assert_file_in_pool_is_diff(file, original, new):
     if not binary_diffs_equal(expected_content, content_of_file_in_pool):
 #    if abs(expected_size - size_of_file_in_pool) > 120:
         print >> sys.stderr, "Expected content:"
-        for c in expected_content:
-            if ord(c) < 32 or ord(c) > 127:
-                sys.stderr.write("*")
-            else:
-                sys.stderr.write(c)
+        binary_dump(expected_content)
         print >> sys.stderr
         print >> sys.stderr, "Actual content:"
-        for c in content_of_file_in_pool:
-            if ord(c) < 32 or ord(c) > 127:
-                sys.stderr.write("*")
-            else:
-                sys.stderr.write(c)
+        binary_dump(content_of_file_in_pool)
         print >> sys.stderr
         sys.exit('### FAILED file in pool is not a diff ' + file)
     else:
