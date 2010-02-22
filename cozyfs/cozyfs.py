@@ -161,8 +161,8 @@ class InodesRepository(object):
 #        row = self.storage.db_execute("select count(*) from data_id where data_id = ? and backup_id = ? and version = ?", (data_id, self.backup_id, self.versions[0])).fetchone()
 #        return row[0]
 
-    def data_has_base_data(self, data_id):
-        cursor = self.storage.db_execute("select count(*) from data_id where data_id = ? and version <> ? and " + self.__backup_id_versions_where_statement('data_id'), (data_id, self.versions[0]))
+    def data_has_base_data(self, inode_number):
+        cursor = self.storage.db_execute("select count(*) from data_id where inode = ? and version <> ? and " + self.__backup_id_versions_where_statement('data_id'), (inode_number, self.versions[0]))
         return cursor.fetchone()[0]
 
     def __inode_from_inode_number_from_database(self, inode_number):
@@ -556,7 +556,6 @@ class FlushingStrategyFactory(object):
     def createFlushingStrategy(self, node):
         inode = self.inodes.inode_from_inode_number(node.inode_number)
         if self.inodes.data_has_base_data(inode.inode_number):
-            print inode
             previous_data_id = self.inodes.previous_data_id_version_of_inode(inode)
             if not self.inodes._InodesRepository__attribute_exists_in_current_version(inode.inode_number, 'data_id'):
                 file_diff_entry = self.file_diff_dependencies.entry_from_data_id(previous_data_id)
@@ -618,14 +617,18 @@ class DiffFileFlushingStrategy(object):
         original = self.storage.real_path(original)
         new = self.storage.real_path(new)
         diff = self.storage.real_path(diff)
-        xdelta3.xd3_main_cmdline(['xdelta3', '-e', '-s', original, new, diff])
+#        global xd
+#        shutil.copy(original, '/tmp/xdelta-bug/' + str(xd) + '--' + os.path.basename(original))
+#        xd += 1
+#        shutil.copy(new, '/tmp/xdelta-bug/' + str(xd) + '--' + os.path.basename(new))
+#        xd += 1
+        xdelta3.xd3_main_cmdline(['xdelta3', '-D', '-e', '-s', original, new, diff])
 
     def __size_of_diff_is_small_enough(self, size_of_diff, size_of_nondiff):
         return size_of_diff < size_of_nondiff * DIFF_LIMIT
 
     def close(self):
         self.original_data_path.release()
-
 
 class ConsistenceStorage(object):
     '''
