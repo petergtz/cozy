@@ -307,6 +307,28 @@ class NodesRepository(object):
         count = self.storage.db_execute("select count(*) from Nodes where inode_number=?", (inode.inode_number,)).fetchone()[0]
         return count == 0
 
+    def some_node_id_from_inode_number(self, inode_number):
+        row = self.storage.db_execute("SELECT node_id FROM Nodes WHERE inode_number=?", (inode_number,)).fetchone()
+        if row is None:
+            return None
+        else:
+            return row[0]
+
+    def data_path_from_node_id(self, node_id):
+        data_path = ''
+        while(True):
+            row = self.storage.db_execute("SELECT nodename, parent_node_id FROM Nodes WHERE node_id=?", (node_id,)).fetchone()
+            if row is None:
+                return None
+            data_path = path_join(row[0], data_path)
+            if row[1] == 0:
+                break
+            node_id = row[1]
+        return data_path.rstrip('/')
+
+
+
+
 class BasicOpenFile(object):
     def __init__(self, storage):
         self.storage = storage
@@ -890,7 +912,7 @@ class CozyFS(fuse.Fuse):
         inode = Inode(None, type=SOFT_LINK, mode=0, size=len(src_path),
                       uid=self.GetContext()['uid'], gid=self.GetContext()['gid'],
                       atime=ctime, ctime=ctime, mtime=ctime,
-                      data_path=src_path)
+                      data_id=src_path)
         self.inodes.insert(inode)
         new_node = Node(target_path, inode.inode_number)
         self.nodes.insert(new_node)
@@ -902,8 +924,8 @@ class CozyFS(fuse.Fuse):
         self.log.debug("PARAMS: path = '%s'", path)
         node = self.nodes.node_from_path(path)
         inode = self.inodes.inode_from_inode_number(node.inode_number)
-        self.log.debug("RETURNING: path = '%s'", inode['data_path'])
-        return inode['data_path']
+        self.log.debug("RETURNING: path = '%s'", inode['data_id'])
+        return inode['data_id']
 
 
     def rename(self, old_path, new_path):
@@ -938,7 +960,7 @@ class CozyFS(fuse.Fuse):
     def __unlink_or_rmdir(self, path):
         node = self.nodes.node_from_path(path)
         inode = self.inodes.inode_from_inode_number(node.inode_number)
-
+        data_id = inode['data_id']
         if self.nodes.node_has_base_nodes(node.node_id):
             old_path = node.path
             node.path = ''
@@ -947,11 +969,17 @@ class CozyFS(fuse.Fuse):
         else:
             self.nodes.delete_node(node)
             if self.nodes.inode_not_used_anymore(inode):
-                data_id = inode['data_id']
                 file_system_object_type = inode["type"]
                 self.inodes.delete_inode(inode.inode_number)
                 if file_system_object_type == FILE:
                     self.__remove_data_path_recursively(data_id)
+
+        node_id = self.nodes.some_node_id_from_inode_number(inode.inode_number)
+        if node_id is not None:
+            data_path = self.nodes.data_path_from_node_id(node_id)
+            if data_path is not None:
+                print 'path "', path, '" will be replaced by "', data_path, '"'
+                self.file_diff_dependencies.update_data_path(data_id, data_path)
         self.storage.commit()
         return 0
 

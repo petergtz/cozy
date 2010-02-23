@@ -448,6 +448,7 @@ try:
     rm('image.jpg')
     compare_file_content(os.path.join(DATA_DIR, 'image1.jpg'), 'folder4/hardlink_to_image.jpg')
     softlink('folder4/hardlink_to_image.jpg', 'softlink_to_image.jpg')
+    hardlink('folder4/hardlink_to_image.jpg', 'a_new_hardlink')
     umount(mountpath)
 
     version4 = snapshot(TARGET_DIR, 666, version3)
@@ -456,6 +457,18 @@ try:
     add_string_to_file('overwriter', 'AND THIS IS NUMBER 2')
     compare_file_content(os.path.join(DATA_DIR, 'image1.jpg'), 'folder4/hardlink_to_image.jpg')
     compare_file_content('softlink_to_image.jpg', 'folder4/hardlink_to_image.jpg')
+    umount(mountpath)
+
+    version5 = snapshot(TARGET_DIR, 666, version4)
+
+    mount(TARGET_DIR, mountpath, backup_id=666, version=version5)
+    compare_file_content('a_new_hardlink', 'folder4/hardlink_to_image.jpg')
+    add_string_to_file('a_new_hardlink', 'HARDLINK_ADDITION')
+    compare_file_content('a_new_hardlink', 'folder4/hardlink_to_image.jpg')
+    rm('folder4/hardlink_to_image.jpg')
+    compare_file_content('a_new_hardlink', os.path.join(DATA_DIR, 'image1.jpg'))
+
+
     umount(mountpath)
 
 
