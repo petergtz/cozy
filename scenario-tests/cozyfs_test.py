@@ -466,9 +466,12 @@ try:
     add_string_to_file('a_new_hardlink', 'HARDLINK_ADDITION')
     compare_file_content('a_new_hardlink', 'folder4/hardlink_to_image.jpg')
     rm('folder4/hardlink_to_image.jpg')
+
+
+    umount(mountpath)
+
+    mount(TARGET_DIR, mountpath, backup_id=666, version=version4)
     compare_file_content('a_new_hardlink', os.path.join(DATA_DIR, 'image1.jpg'))
-
-
     umount(mountpath)
 
 

@@ -307,8 +307,8 @@ class NodesRepository(object):
         count = self.storage.db_execute("select count(*) from Nodes where inode_number=?", (inode.inode_number,)).fetchone()[0]
         return count == 0
 
-    def some_node_id_from_inode_number(self, inode_number):
-        row = self.storage.db_execute("SELECT node_id FROM Nodes WHERE inode_number=?", (inode_number,)).fetchone()
+    def some_node_id_from_inode_number_not_equal_node_id(self, inode_number, node_id):
+        row = self.storage.db_execute("SELECT node_id FROM Nodes WHERE inode_number=? and node_id <> ?", (inode_number, node_id)).fetchone()
         if row is None:
             return None
         else:
@@ -546,6 +546,18 @@ class FileDiffDependencies(object):
 #        self.storage.db_execute('UPDATE FileDiffDependencies SET based_on_data_path = ? WHERE data_path = ?',
 #                                (based_on_data_path, data_path))
 
+    def remove_and_handle_data_path(self, data_id):
+        entry = self.entry_from_data_id(data_id)
+#        hash = self.storage.db_execute("SELECT hash FROM FileDiffDependencies WHERE data_id = ?", (data_id,)).fetchone()[0]
+        self.storage.db_execute("DELETE FROM FileDiffDependencies WHERE data_id = ?", (data_id,))
+        count = self.storage.db_execute("SELECT count(*) FROM FileDiffDependencies WHERE data_path = ?", (entry.data_path,)).fetchone()[0]
+        if count > 0:
+            self.storage.move_file(PlainPath(entry.data_path), PermanentPath(entry.hash))
+            self.storage.db_execute("UPDATE FileDiffDependencies SET data_path ='' WHERE data_path = ?", (entry.data_path,))
+        else:
+            self.storage.remove_file(PlainPath(entry.data_path))
+
+
     def insert(self, hash, based_on_hash, data_path):
         new_data_id = self.__get_new_data_id()
         self.storage.db_execute('INSERT INTO FileDiffDependencies (data_id, hash, based_on_hash, data_path) VALUES (?, ?, ?, ?)',
@@ -620,19 +632,20 @@ class DiffFileFlushingStrategy(object):
             self.original_data_path = PermanentPath(file_diff_entry.hash)
 
         self.original_hash = file_diff_entry.hash
-        self.original_size = file_diff_entry.size
+        self.original_size = storage.file_size_of(self.original_data_path)
 
 
     def flush(self, new_hash, working_data_path):
-        diff_data_path = 'tmp/diff.%s' % uuid4()
-        self.__create_diff(working_data_path, self.original_data_path, diff_data_path)
-        diff_size = self.storage.file_size_of(diff_data_path)
-        if self.__size_of_diff_is_small_enough(diff_size, self.original_size):
-            self.storage.move_file(diff_data_path, 'perm/' + self.original_hash)
-            self.file_diff_dependencies.update_based_on_hash(self.previous_data_id, new_hash)
-            self.file_diff_dependencies.update_size(self.previous_data_id, diff_size)
-        else:
-            self.storage.remove_file(diff_data_path)
+#        diff_data_path = 'tmp/diff.%s' % uuid4()
+#        self.__create_diff(working_data_path, self.original_data_path, diff_data_path)
+#        diff_size = self.storage.file_size_of(diff_data_path)
+#        if self.__size_of_diff_is_small_enough(diff_size, self.original_size):
+#            self.storage.move_file(diff_data_path, 'perm/' + self.original_hash)
+#            self.file_diff_dependencies.update_based_on_hash(self.previous_data_id, new_hash)
+#            self.file_diff_dependencies.update_size(self.previous_data_id, diff_size)
+#        else:
+#            self.storage.remove_file(diff_data_path)
+        pass
 
 
     def __create_diff(self, original, new, diff):
@@ -682,6 +695,9 @@ class ConsistenceStorage(object):
 
     def remove_file(self, filename):
         os.remove(self.real_path(filename))
+
+    def chmod_file(self, path, mode):
+        os.chmod(self.real_path(path), mode)
 
     def commit(self):
         self.commit_delay_counter += 1
@@ -741,7 +757,7 @@ class CozyFS(fuse.Fuse):
             return version
 
     def __set_readonly_if_version_is_base(self):
-        cursor = self.storage.db_execute("select * from Versions where based_on_version=? and backup_id=?", (int(self.version), int(self.backup_id)))
+        cursor = self.storage.db_execute("select * from Versions where based_on_version = ? and backup_id = ?", (int(self.version), int(self.backup_id)))
         if cursor.fetchone() is not None:
             self.readonly = True
 
@@ -759,10 +775,10 @@ class CozyFS(fuse.Fuse):
         self.versions = []
         while version != None:
             self.versions.append(version)
-            cursor = self.storage.db_execute("select based_on_version from Versions where version=? and backup_id=?", (version, self.backup_id))
+            cursor = self.storage.db_execute("select based_on_version from Versions where version = ? and backup_id = ?", (version, self.backup_id))
             version = cursor.fetchone()[0]
 
-        self.log.debug("Backup_id: %s, Versions: %s", self.backup_id, self.versions)
+        self.log.debug("Backup_id: % s, Versions: % s", self.backup_id, self.versions)
 
 
     def close(self):
@@ -770,7 +786,7 @@ class CozyFS(fuse.Fuse):
             os.remove(self.lockfile)
 
     def __backup_id_versions_where_statement(self, table_name):
-        return " (" + table_name + ".backup_id = " + self.backup_id + " AND (" + (table_name + ".version = ") + (" or " + table_name + ".version = ").join(map(str, self.versions)) + ") ) "
+        return " (" + table_name + ".backup_id=" + self.backup_id + " AND (" + (table_name + ".version=") + (" or " + table_name + ".version=").join(map(str, self.versions)) + ")) "
 
 
     def getattr(self, path):
@@ -954,8 +970,23 @@ class CozyFS(fuse.Fuse):
     def unlink(self, path):
         self.log.debug("PARAMS: path = '%s'", path)
         self.__assert_readwrite()
-        os.unlink(self.__plain_path(path))
-        return self.__unlink_or_rmdir(path)
+#        os.unlink(self.__plain_path(path))
+        node = self.nodes.node_from_path(path)
+        inode = self.inodes.inode_from_inode_number(node.inode_number)
+        data_id = inode['data_id']
+        self.__unlink_or_rmdir(path)
+
+        node_id = self.nodes.some_node_id_from_inode_number_not_equal_node_id(inode.inode_number, node.node_id)
+        if node_id is not None:
+            data_path = self.nodes.data_path_from_node_id(node_id)
+            if data_path is not None:
+                print 'path "', path, '" will be replaced by "', data_path, '"'
+                self.file_diff_dependencies.update_data_path(data_id, data_path)
+            os.unlink(self.__plain_path(path))
+        else:
+            self.file_diff_dependencies.remove_and_handle_data_path(inode['data_id'])
+        self.storage.commit()
+        return 0
 
     def __unlink_or_rmdir(self, path):
         node = self.nodes.node_from_path(path)
@@ -974,13 +1005,6 @@ class CozyFS(fuse.Fuse):
                 if file_system_object_type == FILE:
                     self.__remove_data_path_recursively(data_id)
 
-        node_id = self.nodes.some_node_id_from_inode_number(inode.inode_number)
-        if node_id is not None:
-            data_path = self.nodes.data_path_from_node_id(node_id)
-            if data_path is not None:
-                print 'path "', path, '" will be replaced by "', data_path, '"'
-                self.file_diff_dependencies.update_data_path(data_id, data_path)
-        self.storage.commit()
         return 0
 
     def __remove_data_path_recursively(self, data_id):
@@ -998,7 +1022,10 @@ class CozyFS(fuse.Fuse):
         self.log.debug("PARAMS: path = '%s'", path)
         self.__assert_readwrite()
         os.rmdir(self.__plain_path(path))
-        return self.__unlink_or_rmdir(path)
+        self.__unlink_or_rmdir(path)
+        self.storage.commit()
+        return 0
+
 
     def open(self, path, flags):
         self.log.debug("PARAMS: path = '%s', flags = %s", path, flags2string(flags))
@@ -1073,6 +1100,7 @@ class CozyFS(fuse.Fuse):
 
     def chmod(self, path, mode):
         self.log.debug("PARAMS: path = '%s'", path)
+        self.storage.chmod_file(PlainPath(path.lstrip('/')), mode)
         ctime = time.time()
         return self.__update_attributes(path, {'mode': mode, 'atime': ctime, 'mtime': ctime})
 
@@ -1141,8 +1169,19 @@ def parse_commandline(argv):
 #    input_params.coverage = options.coverage
     return input_params
 
+def pydevBrk():
+    print "BREAK"
+    pydevdPath = "/opt/eclipse/dropins/plugins/org.python.pydev.debug_1.5.1.1258496115/pysrc"
+    if not pydevdPath in sys.path:
+        sys.path.append(pydevdPath)
+        try:
+            import pydevd
+            pydevd.settrace()
+        except ImportError:
+            print "cannot connect"
 
 def main(argv=sys.argv[1:]):
+#    pydevBrk()
     input_params = parse_commandline(argv)
 
     initLogger()
