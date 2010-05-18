@@ -287,11 +287,17 @@ with Setup():
 
             current_path = DATA
             current_version = cozy_backup.restore_backend.VERSION_PRESENT
+            first_time = True
             for change_number in range(len(data_handler.changes)):
                 data_handler.undo_change_data()
                 current_version = cozy_backup.get_prev_version(current_version)
                 current_path = cozy_backup.get_equivalent_path(current_path, current_version)
                 data_handler.compare_data_with(current_path)
+                if first_time:
+                    print 'CHECKING PLAIN FILESYSTEM'
+                    data_handler.compare_data_with(os.path.join(BACKUP_DIR, 'plain'))
+                    print 'DONE CHECKING PLAIN FILESYSTEM'
+                    first_time = False
 
             for change_number in range(len(data_handler.changes)):
                 data_handler.redo_change_data()
