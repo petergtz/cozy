@@ -528,6 +528,7 @@ class FileDiffDependencies(object):
     def entry_from_data_id(self, data_id):
         row = self.storage.db_execute('SELECT * FROM FileDiffDependencies WHERE data_id = ?', (data_id,)).fetchone()
         file_diff_entry = FileDiffEntry(row['data_id'], row['hash'], row['based_on_hash'], row['data_path'], row['data_size'])
+        assert row['data_path'] != ''
         return file_diff_entry
 
     def update_hash(self, data_id, hash):
@@ -549,13 +550,17 @@ class FileDiffDependencies(object):
     def remove_and_handle_data_path(self, data_id):
         entry = self.entry_from_data_id(data_id)
 #        hash = self.storage.db_execute("SELECT hash FROM FileDiffDependencies WHERE data_id = ?", (data_id,)).fetchone()[0]
-        self.storage.db_execute("DELETE FROM FileDiffDependencies WHERE data_id = ?", (data_id,))
         count = self.storage.db_execute("SELECT count(*) FROM FileDiffDependencies WHERE data_path = ?", (entry.data_path,)).fetchone()[0]
         if count > 0:
-            self.storage.move_file(PlainPath(entry.data_path), PermanentPath(entry.hash))
-            self.storage.db_execute("UPDATE FileDiffDependencies SET data_path ='' WHERE data_path = ?", (entry.data_path,))
+            # NOTE: we could *move* the file so we don't have to copy it (*remove*
+            # it in the else block. That would be faster.
+            # But we'd like to keep the operations on the plain filesystem in
+            # a delegating way in CozyFS. This is less error prone. And avoiding corruption
+            # in the plain filesystem is the highest goal.
+            self.storage.copy_file(PlainPath(entry.data_path), PermanentPath(entry.hash))
+            self.storage.db_execute("UPDATE FileDiffDependencies SET data_path = NULL WHERE data_path = ?", (entry.data_path,))
         else:
-            self.storage.remove_file(PlainPath(entry.data_path))
+            self.storage.db_execute("DELETE FROM FileDiffDependencies WHERE data_id = ?", (data_id,))
 
 
     def insert(self, hash, based_on_hash, data_path):
@@ -977,14 +982,17 @@ class CozyFS(fuse.Fuse):
         self.__unlink_or_rmdir(path)
 
         node_id = self.nodes.some_node_id_from_inode_number_not_equal_node_id(inode.inode_number, node.node_id)
-        if node_id is not None:
+        if node_id is not None: # this is the hardlink handling.
             data_path = self.nodes.data_path_from_node_id(node_id)
             if data_path is not None:
                 print 'path "', path, '" will be replaced by "', data_path, '"'
                 self.file_diff_dependencies.update_data_path(data_id, data_path)
             os.unlink(self.__plain_path(path))
-        else:
+        else: # no hardlink to same file exists. Still we must handle file_diff_dependencies
+            data_path = self.file_diff_dependencies.entry_from_data_id(data_id).data_path
             self.file_diff_dependencies.remove_and_handle_data_path(inode['data_id'])
+            self.storage.remove_file(PlainPath(data_path))
+
         self.storage.commit()
         return 0
 
