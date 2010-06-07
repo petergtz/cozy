@@ -420,6 +420,7 @@ def binary_dump(binary_data):
             sys.stderr.write(c)
 
 def assert_file_in_pool_is_diff(file, original, new):
+    print "WARNING: Check if this test is correct first"
     filename_in_pool = md5sum(original)
     with open(os.path.join(TARGET_DIR, 'FilePool', filename_in_pool), 'rb') as file_in_pool:
         content_of_file_in_pool = file_in_pool.read()
@@ -438,9 +439,16 @@ def assert_file_in_pool_is_diff(file, original, new):
         print >> sys.stderr
         print >> sys.stderr, "Actual content:"
         binary_dump(content_of_file_in_pool)
+#        print >> sys.stderr, "skipped"
         print >> sys.stderr
         sys.exit('### FAILED file in pool is not a diff ' + file)
     else:
+#        print "Expected content:"
+#        binary_dump(expected_content)
+#        print
+#        print "Actual content:"
+#        binary_dump(content_of_file_in_pool)
+#        print
         print '### PASSED file in pool is diff', file
 
 

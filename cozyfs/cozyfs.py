@@ -371,16 +371,16 @@ class PlainPath(object):
 
 
 class OpenFileInReadMode(BasicOpenFile):
-    def __init__(self, storage, data_id, file_diff_dependencies):
+    def __init__(self, storage, file_diff_entry, file_diff_dependencies):
         BasicOpenFile.__init__(self, storage)
 
-        file_diff_dependency_chain = file_diff_dependencies.dependency_chain(data_id)
+        file_diff_dependency_chain = file_diff_dependencies.dependency_chain(file_diff_entry.data_id)
         if file_diff_dependency_chain.has_more_than_one_element():
 #            file_diff_entry = file_diff_dependencies.entry_from_data_id(data_id)
-            self.working_data_path = TemporaryPath(data_id + '.' + uuid4(), storage)
-            file_diff_dependency_chain.apply_patches_and_save_as(storage.real_path(self.data_path))
+            self.working_data_path = TemporaryPath(str(file_diff_entry.data_id) + '.' + str(uuid4()), storage)
+            file_diff_dependency_chain.apply_patches_and_save_as(self.working_data_path)
         else:
-            file_diff_entry = file_diff_dependencies.entry_from_data_id(data_id)
+#            file_diff_entry = file_diff_dependencies.entry_from_data_id(file_diff_dep_entry.data_id)
             if file_diff_entry.data_path is None:
                 self.working_data_path = PermanentPath(file_diff_entry.hash)
             else:
@@ -450,9 +450,9 @@ class OpenFileInReadWriteMode(OpenFileInReadMode, OpenFileInWriteMode):
         OpenFileInWriteMode.close(self)
 
 class FileDiffDependencyChain(object):
-    def __init__(self, storage, hash):
+    def __init__(self, storage, data_id):
         self.storage = storage
-        self.hash = hash
+        self.data_id = data_id
 
 #FIXME: __depency_chain is very expensive and should not be called twice.
     def has_more_than_one_element(self): # FIXME: rename contains_at_least_one_diff
@@ -462,7 +462,7 @@ class FileDiffDependencyChain(object):
         reverse_hash_dep_chain = self.__dependency_chain()
         reverse_hash_dep_chain.reverse()
 
-        real_base_path = self.storage.real_path('perm/' + reverse_hash_dep_chain[0])
+        real_base_path = self.storage.real_path(reverse_hash_dep_chain[0])
 
         if self.__dep_chain_includes_more_than_1_diff(reverse_hash_dep_chain):
             merged_diff_path = self.__merge_diffs(reverse_hash_dep_chain, target_path)
@@ -471,20 +471,38 @@ class FileDiffDependencyChain(object):
             xdelta3.xd3_main_cmdline(cmdline)
             self.storage.remove_file(merged_diff_path)
         elif len(reverse_hash_dep_chain) == 2:
-            real_merged_diff_path = self.storage.real_path('perm/' + reverse_hash_dep_chain[1])
+            real_merged_diff_path = self.storage.real_path(reverse_hash_dep_chain[1])
             cmdline = ['xdelta3', '-f', '-d', '-s', real_base_path, real_merged_diff_path, self.storage.real_path(target_path)]
             xdelta3.xd3_main_cmdline(cmdline)
 
     def __dependency_chain(self):
-        hash = self.hash
-        hash_dep_chain = [hash]
+        row = self.storage.db_execute("SELECT hash, based_on_hash, data_path FROM FileDiffDependencies WHERE data_id = ?", (self.data_id,)).fetchone()
+
+        assert row is not None
+        assert not ((row['based_on_hash'] is not None) and (row['data_path'] is not None))
+
+        if row['data_path'] is not None:
+            return [PlainPath(row['data_path'])]
+
+        hash_dep_chain = [PermanentPath(row['hash'])]
         while True:
-            row = self.storage.db_execute("SELECT based_on_hash FROM FileDiffDependencies WHERE hash = ?", (hash,)).fetchone()
-            if row is None or row[0] is None or row[0] == '':
+            row = self.storage.db_execute("SELECT hash, based_on_hash, data_path FROM FileDiffDependencies WHERE hash = ? and based_on_hash <> ?", (row['based_on_hash'], row['based_on_hash'])).fetchone()
+            if row is None:
                 break
-            else:
-                hash = row[0]
-                hash_dep_chain.append(hash)
+            assert not ((row['based_on_hash'] is not None) and (row['data_path'] is not None))
+            if row['data_path'] is not None:
+                assert row['based_on_hash'] is None
+                hash_dep_chain.append[PlainPath(row['data_path'])]
+                break
+
+            hash_dep_chain.append(PermanentPath(row['hash']))
+
+            if row['based_on_hash'] is None or row['based_on_hash'] == '':
+                break
+
+            # detect programming errors
+#            assert hash != row[0], \
+#                "Cyclic dependency in FileDiffDependencies table: hash == based_on_hash == " + hash
         return hash_dep_chain
 
     def __dep_chain_includes_more_than_1_diff(self, reverse_data_path_dep_chain):
@@ -493,9 +511,9 @@ class FileDiffDependencyChain(object):
     def __merge_diffs(self, reverse_data_path_dep_chain, target_path):
         diff_merge_cmdline = ['xdelta3', 'merge']
         for diff_path in reverse_data_path_dep_chain[1:-1]:
-            real_diff_path = self.storage.real_path('perm/' + diff_path)
+            real_diff_path = self.storage.real_path(diff_path)
             diff_merge_cmdline.extend(['-m', real_diff_path])
-        real_final_diff_path = self.storage.real_path('perm/' + reverse_data_path_dep_chain[-1])
+        real_final_diff_path = self.storage.real_path(reverse_data_path_dep_chain[-1])
         merged_diff_path = 'tmp/' + target_path + 'merged_diff' + uuid4()
         diff_merge_cmdline.extend([real_final_diff_path, self.storage.real_path(merged_diff_path)])
         xdelta3.xd3_main_cmdline(diff_merge_cmdline)
@@ -569,8 +587,8 @@ class FileDiffDependencies(object):
                                 (new_data_id, hash, based_on_hash, data_path))
         return new_data_id
 
-    def dependency_chain(self, hash):
-        return FileDiffDependencyChain(self.storage, hash)
+    def dependency_chain(self, data_id):
+        return FileDiffDependencyChain(self.storage, data_id)
 
     def no_hash_dependent_anymore_on(self, hash):
         return self.storage.db_execute('SELECT count(*) FROM FileDiffDependencies WHERE based_on_hash = ?', (hash,)).fetchone()[0]
@@ -579,7 +597,7 @@ class FileDiffDependencies(object):
         self.storage.db_execute('DELETE FROM FileDiffDependencies WHERE hash=?', (hash,))
 
     def base_of(self, hash):
-        row = self.storage.db_execute("SELECT based_on_hash FROM FileDiffDependencies WHERE hash = ?", (hash,)).fetchone()
+        row = self.storage.db_execute("SELECT based_on_hash FROM FileDiffDependencies WHERE hash = ? AND based_on_hash <> ?", (hash, hash)).fetchone()
         if row is None or row[0] is None or row[0] == '':
             return None
         else:
@@ -593,6 +611,7 @@ class FlushingStrategyFactory(object):
         self.file_diff_dependencies = file_diff_dependencies
 
     def createFlushingStrategy(self, node):
+#        return PlainFileFlushingStrategy()
         inode = self.inodes.inode_from_inode_number(node.inode_number)
         if self.inodes.data_has_base_data(inode.inode_number):
             previous_data_id = self.inodes.previous_data_id_version_of_inode(inode)
@@ -604,7 +623,10 @@ class FlushingStrategyFactory(object):
                 self.file_diff_dependencies.update_hash(previous_data_id, file_diff_entry.hash)
                 self.file_diff_dependencies.update_based_on_hash(previous_data_id, file_diff_entry.hash)
 
-                self.storage.copy_file(PlainPath(file_diff_entry.data_path), PermanentPath(file_diff_entry.hash))
+                original = self.storage.real_path(PlainPath(file_diff_entry.data_path))
+                diff = self.storage.real_path(PermanentPath(file_diff_entry.hash))
+                xdelta3.xd3_main_cmdline(['xdelta3', '-f', '-D', '-e', '-s', original, original, diff])
+#                self.storage.copy_file(PlainPath(file_diff_entry.data_path), PermanentPath(file_diff_entry.hash))
 
                 self.inodes.update_inode_in_place(node.inode_number, {'data_id': new_data_id})
 
@@ -631,7 +653,7 @@ class DiffFileFlushingStrategy(object):
         file_diff_entry = file_diff_dependencies.entry_from_data_id(previous_data_id)
         previous_version_file_diff_dependency_chain = file_diff_dependencies.dependency_chain(previous_data_id)
         if previous_version_file_diff_dependency_chain.has_more_than_one_element():
-            self.original_data_path = TemporaryPath(previous_data_id + '.orig.' + uuid4(), storage)
+            self.original_data_path = TemporaryPath(str(previous_data_id) + '.orig.' + str(uuid4()), storage)
             previous_version_file_diff_dependency_chain.apply_patches_and_save_as(self.original_data_path)
         else:
             self.original_data_path = PermanentPath(file_diff_entry.hash)
@@ -641,15 +663,15 @@ class DiffFileFlushingStrategy(object):
 
 
     def flush(self, new_hash, working_data_path):
-#        diff_data_path = 'tmp/diff.%s' % uuid4()
-#        self.__create_diff(working_data_path, self.original_data_path, diff_data_path)
-#        diff_size = self.storage.file_size_of(diff_data_path)
-#        if self.__size_of_diff_is_small_enough(diff_size, self.original_size):
-#            self.storage.move_file(diff_data_path, 'perm/' + self.original_hash)
-#            self.file_diff_dependencies.update_based_on_hash(self.previous_data_id, new_hash)
-#            self.file_diff_dependencies.update_size(self.previous_data_id, diff_size)
-#        else:
-#            self.storage.remove_file(diff_data_path)
+        diff_data_path = 'tmp/diff.%s' % uuid4()
+        self.__create_diff(working_data_path, self.original_data_path, diff_data_path)
+        diff_size = self.storage.file_size_of(diff_data_path)
+        if self.__size_of_diff_is_small_enough(diff_size, self.original_size):
+            self.storage.move_file(diff_data_path, 'perm/' + self.original_hash)
+            self.file_diff_dependencies.update_based_on_hash(self.previous_data_id, new_hash)
+            self.file_diff_dependencies.update_size(self.previous_data_id, diff_size)
+        else:
+            self.storage.remove_file(diff_data_path)
         pass
 
 
@@ -1052,7 +1074,7 @@ class CozyFS(fuse.Fuse):
                 return OpenFileInReadWriteMode(self.storage, file_diff_entry.data_id, file_content_strategy, self.file_diff_dependencies)
         else: # apparently there is nothing like a "read" flag
             file_diff_entry = self.file_diff_dependencies.entry_from_data_id(inode['data_id'])
-            return OpenFileInReadMode(self.storage, file_diff_entry.data_id, self.file_diff_dependencies)
+            return OpenFileInReadMode(self.storage, file_diff_entry, self.file_diff_dependencies)
 
     def read(self, path, length, offset, fH):
         buf = fH.read(length, offset)
