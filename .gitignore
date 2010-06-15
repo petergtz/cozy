@@ -2,3 +2,6 @@ cozyfs-profile-output-*
 *.pyc
 .externalToolBuilders
 *~
+scenario-tests/coveragedata
+error.output.txt
+
