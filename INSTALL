@@ -2,15 +2,13 @@ Installation Instructions
 ==========================
 
 Open a terminal and cd to current directory. Then type:
-	make
 	make install
+or
+	make PREFIX=/my/prefix install
 
-The first line will download nautilus, apply patches needed for Cozy and build it.
-The second line will install all Nautilus and Cozy files.
+Cozy is written in Python and therefore need not be built.
 
-WARNING: if you have Nautilus already installed, this will OVERWRITE your current Nautilus installation!
+For run-time dependencies of Cozy, please have a look at the DEPENDENCIES file.
 
-If you want to install it in a different directory, you can change the first line of the Makefile accordingly. In this case, make sure that you adjust all the necessary system paths as well.
-
-For dependencies of Cozy and Nautilus, please have a look at the DEPENDECIES file.
+IMPORTANT: you need a version of Nautilus with DBus-support for Cozy. 
 
