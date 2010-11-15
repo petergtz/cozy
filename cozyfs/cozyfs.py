@@ -104,7 +104,7 @@ class Stat(fuse.Stat):
 
 
 class Inode(object):
-    def __init__(self, inode_number, **attributes):
+    def __init__(self, inode_number=None, **attributes):
         self.inode_number = inode_number
         self.attributes = attributes
         self.changed_attributes = {}
@@ -127,20 +127,25 @@ class InodesRepository(object):
         self.versions = versions
         self.backup_id = backup_id
         self.attributes_names = ['size', 'atime', 'mtime', 'ctime', 'mode', 'uid', 'gid', 'type', 'data_id']
-        self.cached_inodes = dict()
-        self.cached_inodes[0] = Inode(inode_number=0, size=4096, atime=0, mtime=0, ctime=0, mode=0, uid=0, gid=0, type=DIRECTORY)
-        self.log = logging.getLogger('cozyfs')
+        self.cached_inodes = {0: Inode(inode_number=0, size=4096, atime=0, mtime=0, ctime=0, mode=0, uid=0, gid=0, type=DIRECTORY) }
 
     def insert(self, inode):
-        inode_number = self.__get_new_inode_number()
-        inode.inode_number = inode_number
-        for (name, value) in inode.attributes.iteritems():
-            self.__insert_attribute(inode_number, name, value)
-        self.cached_inodes[inode_number] = inode
+        if inode.inode_number is None:
+            inode.inode_number = self.__get_new_inode_number()
+            for (name, value) in inode.attributes.iteritems():
+                self.__insert_attribute(inode.inode_number, name, value)
+        else:
+            for (name, value) in inode.attributes.iteritems():
+                self.__update_attribute(inode.inode_number, name, value)
+        self.cached_inodes[inode.inode_number] = inode
 
     def __insert_attribute(self, inode, name, value):
         self.storage.db_execute('INSERT INTO ' + name + ' (' + name + ',inode,backup_id,version) VALUES (?,?,?,?)',
                                 (value, inode, self.backup_id, self.versions[0]))
+
+    def __update_attribute(self, inode, name, value):
+        self.storage.db_execute('UPDATE ' + name + ' SET ' + name + '=?, backup_id=?, version=? WHERE inode=?',
+                                (value, self.backup_id, self.versions[0], inode))
 
     def __get_new_inode_number(self):
         max_inode_number = self.storage.db_execute('select max(inode_number) from Nodes').fetchone()[0]
@@ -208,35 +213,42 @@ class InodesRepository(object):
 
 
 class Node(object):
-    def __init__(self, path, inode_number, node_id=None, parent_node_id=None):
+    def __init__(self, path, inode, node_id=None, parent_node_id=None):
         self.node_id = node_id
         self.path = path
         self.parent_node_id = parent_node_id
-        self.inode_number = inode_number
+        self.inode = inode
 
     def __str__(self):
         return "<node_id: %s , path: %s , parent_node_id: %s , inode_number: %s>" % \
-                (str(self.node_id), self.path, str(self.parent_node_id), str(self.inode_number))
+                (str(self.node_id), self.path, str(self.parent_node_id), str(self.inode.inode_number))
 
 
 class NodesRepository(object):
-    def __init__(self, storage, versions, backup_id):
+    def __init__(self, storage, versions, backup_id, inodes):
         self.storage = storage
         self.versions = versions
         self.backup_id = backup_id
         self.log = logging.getLogger('cozyfs')
         self.cached_nodes = {}
-        root_node = Node(path='/', inode_number=0)
+        root_node = Node(path='/', inode=Inode(inode_number=0, size=4096, atime=0, mtime=0, ctime=0, mode=0, uid=0, gid=0, type=DIRECTORY))
         root_node.node_id = 0
         root_node.parent_node_id = None
         self.cached_nodes['/'] = root_node
+        self.inodes = inodes
 
     def insert(self, node):
-        node.node_id = self.__get_new_node_id()
+        self.inodes.insert(node.inode)
+
         dirname, basename = path_split(node.path)
         parent_node = self.node_from_path(dirname)
-        query = 'INSERT INTO Nodes (backup_id,version,nodename,node_id,parent_node_id, inode_number) VALUES (?,?,?,?,?,?)'
-        self.storage.db_execute(query, (self.backup_id, self.versions[0], basename, node.node_id, parent_node.node_id, node.inode_number))
+        if node.node_id is None:
+            node.node_id = self.__get_new_node_id()
+            query = 'INSERT INTO Nodes (backup_id,version,nodename,node_id,parent_node_id, inode_number) VALUES (?,?,?,?,?,?)'
+            self.storage.db_execute(query, (self.backup_id, self.versions[0], basename, node.node_id, parent_node.node_id, node.inode.inode_number))
+        else:
+            query = 'UPDATE Nodes SET backup_id=?, version=?, nodename=?, parent_node_id=?, inode_number=? WHERE node_id=?'
+            self.storage.db_execute(query, (self.backup_id, self.versions[0], basename, parent_node.node_id, node.inode.inode_number, node.node_id))
 
         self.cached_nodes[node.path] = node
 
@@ -275,7 +287,7 @@ class NodesRepository(object):
         if row is None:
             return None
         else:
-            return Node(path, row['inode_number'], row['node_id'], parent_node_id)
+            return Node(path, self.inodes.inode_from_inode_number(row['inode_number']), row['node_id'], parent_node_id)
 
     def __backup_id_versions_where_statement(self, table_name):
         return " (" + table_name + ".backup_id = " + self.backup_id + " AND (" + (table_name + ".version = ") + (" or " + table_name + ".version = ").join(map(str, self.versions)) + ") ) "
@@ -285,7 +297,7 @@ class NodesRepository(object):
         if self.__has_current_node(node.node_id):
             self.storage.db_execute("update Nodes set nodename = ?, parent_node_id = ? where node_id = ? and backup_id = ? and version = ?", (basename, node.parent_node_id, node.node_id, self.backup_id, self.versions[0]))
         else:
-            self.storage.db_execute("insert into Nodes (backup_id, version, node_id, nodename, parent_node_id, inode_number) values (?,?,?,?,?,?) ", (self.backup_id, self.versions[0], node.node_id, basename, node.parent_node_id, node.inode_number))
+            self.storage.db_execute("insert into Nodes (backup_id, version, node_id, nodename, parent_node_id, inode_number) values (?,?,?,?,?,?) ", (self.backup_id, self.versions[0], node.node_id, basename, node.parent_node_id, node.inode.inode_number))
 
         del self.cached_nodes[old_path]
         if node.path != '':
@@ -593,7 +605,7 @@ class FlushingStrategyFactory(object):
         self.file_diff_dependencies = file_diff_dependencies
 
     def createFlushingStrategy(self, node):
-        inode = self.inodes.inode_from_inode_number(node.inode_number)
+        inode = self.inodes.inode_from_inode_number(node.inode.inode_number)
         if self.inodes.data_has_base_data(inode.inode_number):
             previous_data_id = self.inodes.previous_data_id_version_of_inode(inode)
             if not self.inodes._InodesRepository__attribute_exists_in_current_version(inode.inode_number, 'data_id'):
@@ -606,9 +618,9 @@ class FlushingStrategyFactory(object):
 
                 self.storage.copy_file(PlainPath(file_diff_entry.data_path), PermanentPath(file_diff_entry.hash))
 
-                self.inodes.update_inode_in_place(node.inode_number, {'data_id': new_data_id})
+                self.inodes.update_inode_in_place(node.inode.inode_number, {'data_id': new_data_id})
 
-            inode = self.inodes.inode_from_inode_number(node.inode_number)
+            inode = self.inodes.inode_from_inode_number(node.inode.inode_number)
 
             previous_data_id = self.inodes.previous_data_id_version_of_inode(inode)
             return DiffFileFlushingStrategy(self.storage, self.file_diff_dependencies, inode['data_id'], previous_data_id)
@@ -749,7 +761,7 @@ class CozyFS(fuse.Fuse):
         self.__init_base_versions(self.version)
 
         self.inodes = InodesRepository(self.storage, self.versions, self.backup_id)
-        self.nodes = NodesRepository(self.storage, self.versions, self.backup_id)
+        self.nodes = NodesRepository(self.storage, self.versions, self.backup_id, self.inodes)
         self.file_diff_dependencies = FileDiffDependencies(self.storage)
 
     def __init_version(self, version):
@@ -799,9 +811,7 @@ class CozyFS(fuse.Fuse):
         node = self.nodes.node_from_path(path)
         if node == None:
             return - errno.ENOENT
-        inode = self.inodes.inode_from_inode_number(node.inode_number)
-        attributes = inode.attributes
-        return self.__stat_from_attribute(attributes)
+        return self.__stat_from_attribute(node.inode.attributes)
 
     def __stat_from_attribute(self, attributes):
         st = Stat()
@@ -876,14 +886,12 @@ class CozyFS(fuse.Fuse):
 
         ctime = time.time()
 
-        inode = Inode(inode_number=None, type=type, mode=mode, size=0,
+        inode = Inode(type=type, mode=mode, size=0,
                       uid=self.GetContext()['uid'], gid=self.GetContext()['gid'],
                       atime=ctime, mtime=ctime, ctime=ctime,
                       data_id=data_id)
-        self.inodes.insert(inode)
 
-        node = Node(path, inode.inode_number)
-        self.nodes.insert(node)
+        self.nodes.insert(Node(path, inode))
 
         self.storage.commit()
         return 0
@@ -916,7 +924,7 @@ class CozyFS(fuse.Fuse):
         os.link(self.__plain_path(src_path), self.__plain_path(target_path))
 
         node = self.nodes.node_from_path(src_path)
-        new_node = Node(target_path, node.inode_number)
+        new_node = Node(target_path, node.inode)
         self.nodes.insert(new_node)
 
         self.storage.commit()
@@ -935,7 +943,7 @@ class CozyFS(fuse.Fuse):
                       atime=ctime, ctime=ctime, mtime=ctime,
                       data_id=src_path)
         self.inodes.insert(inode)
-        new_node = Node(target_path, inode.inode_number)
+        new_node = Node(target_path, inode)
         self.nodes.insert(new_node)
 
         self.storage.commit()
@@ -944,9 +952,8 @@ class CozyFS(fuse.Fuse):
     def readlink(self, path):
         self.log.debug("PARAMS: path = '%s'", path)
         node = self.nodes.node_from_path(path)
-        inode = self.inodes.inode_from_inode_number(node.inode_number)
-        self.log.debug("RETURNING: path = '%s'", inode['data_id'])
-        return inode['data_id']
+        self.log.debug("RETURNING: path = '%s'", node.inode['data_id'])
+        return node.inode['data_id']
 
 
     def rename(self, old_path, new_path):
@@ -958,8 +965,7 @@ class CozyFS(fuse.Fuse):
         new_parent_node = self.nodes.node_from_path(path_dirname(new_path))
 
         os.rename(self.__plain_path(old_path), self.__plain_path(new_path))
-        inode = self.inodes.inode_from_inode_number(node.inode_number)
-        self.file_diff_dependencies.update_data_path(inode['data_id'], new_path.lstrip('/'))
+        self.file_diff_dependencies.update_data_path(node.inode['data_id'], new_path.lstrip('/'))
 
         node.parent_node_id = new_parent_node.node_id
         node.path = new_path
@@ -967,7 +973,7 @@ class CozyFS(fuse.Fuse):
         self.nodes.update_node(node, old_path)
 
         ctime = time.time()
-        self.inodes.update_inode_in_place(node.inode_number, {'atime': ctime, 'mtime':ctime})
+        self.inodes.update_inode_in_place(node.inode.inode_number, {'atime': ctime, 'mtime':ctime})
 
         self.storage.commit()
         return 0
@@ -977,7 +983,7 @@ class CozyFS(fuse.Fuse):
         self.__assert_readwrite()
 #        os.unlink(self.__plain_path(path))
         node = self.nodes.node_from_path(path)
-        inode = self.inodes.inode_from_inode_number(node.inode_number)
+        inode = node.inode
         data_id = inode['data_id']
         self.__unlink_or_rmdir(path)
 
@@ -998,7 +1004,7 @@ class CozyFS(fuse.Fuse):
 
     def __unlink_or_rmdir(self, path):
         node = self.nodes.node_from_path(path)
-        inode = self.inodes.inode_from_inode_number(node.inode_number)
+        inode = node.inode
         data_id = inode['data_id']
         if self.nodes.node_has_base_nodes(node.node_id):
             old_path = node.path
@@ -1038,7 +1044,7 @@ class CozyFS(fuse.Fuse):
     def open(self, path, flags):
         self.log.debug("PARAMS: path = '%s', flags = %s", path, flags2string(flags))
         node = self.nodes.node_from_path(path)
-        inode = self.inodes.inode_from_inode_number(node.inode_number)
+        inode = node.inode
 # FIXME: ATTENTION: it's incredibly ugly, that entry_from_data_id returns something different in the 2 if-paths.
 # it's because FlushingStrategyFactory changes filediffdeps
         if flags & os.O_WRONLY or flags & os.O_RDWR:
@@ -1067,12 +1073,12 @@ class CozyFS(fuse.Fuse):
         try:
             if (isinstance(fh, OpenFileInReadWriteMode) or isinstance(fh, OpenFileInWriteMode)):
                 node = self.nodes.node_from_path(path)
-                inode = self.inodes.inode_from_inode_number(node.inode_number)
+                inode = self.inodes.inode_from_inode_number(node.inode.inode_number)
                 file_diff_entry = self.file_diff_dependencies.entry_from_data_id(inode['data_id'])
                 old_size = file_diff_entry.size
                 new_size = fh.flush()
                 if old_size != new_size:
-                    self.inodes.update_inode_in_place(node.inode_number, {'size': new_size})
+                    self.inodes.update_inode_in_place(node.inode.inode_number, {'size': new_size})
 #                    self.__remove_data_path_recursively(old_data_path)
             self.storage.commit()
         except Exception, e:
@@ -1119,7 +1125,7 @@ class CozyFS(fuse.Fuse):
     def __update_attributes(self, path, attributes):
         self.__assert_readwrite()
         node = self.nodes.node_from_path(path)
-        self.inodes.update_inode_in_place(node.inode_number, attributes)
+        self.inodes.update_inode_in_place(node.inode.inode_number, attributes)
         self.storage.commit()
         return 0
 
@@ -1188,7 +1194,7 @@ def pydevBrk():
         except ImportError:
             print "cannot connect"
 
-def main(argv=sys.argv[1:]):
+def main(argv):
 #    pydevBrk()
     input_params = parse_commandline(argv)
 
@@ -1207,4 +1213,4 @@ def main(argv=sys.argv[1:]):
 
 if __name__ == '__main__':
 #    cProfile.run('mount()', 'cozyfs-profile-output')
-    main()
+    main(sys.argv[1:])
