@@ -59,9 +59,11 @@ class CozyFSTest(unittest.TestCase):
         make_cozyfs(target_dir=TARGET_DIR, backup_id=666)
         os.mkdir(MOUNT_PATH)
 
-    def tearDown(self):
-        check_tmp_dir(TARGET_DIR)
-        clean_up_env()
+    def test_lots_of_softlinks(self):
+        with mounted_filesystem(TARGET_DIR, MOUNT_PATH, 666):
+            copy(os.path.join(DATA_DIR, 'file1'), 'file1')
+            for i in range(100):
+                softlink('file1', 'a_new_softlink' + str(i))
 
     def test_simple_file_functions(self):
 
@@ -126,6 +128,43 @@ class CozyFSTest(unittest.TestCase):
             assert_exists_not('folder4')
             neg_mkdir('folder4')
 
+        check_tmp_dir(TARGET_DIR)
+        clean_up_env()
+
+    def test_simple_hardlink(self):
+        with mounted_filesystem(TARGET_DIR, MOUNT_PATH, 666):
+            copy(os.path.join(DATA_DIR, 'long_text'), 'long_text')
+            hardlink('long_text', 'a_new_hardlink')
+
+        version = snapshot(TARGET_DIR, 666)
+
+        with mounted_filesystem(TARGET_DIR, MOUNT_PATH, 666):
+            assert_file_contents_equal(os.path.join(DATA_DIR, 'long_text'), 'long_text')
+
+        check_tmp_dir(TARGET_DIR)
+        clean_up_env()
+
+    def test_hardlink_still_correct_after_deleting_original_file(self):
+        version = snapshot(TARGET_DIR, 666)
+
+        with mounted_filesystem(TARGET_DIR, MOUNT_PATH, 666):
+            copy(os.path.join(DATA_DIR, 'long_text'), 'long_text')
+            hardlink('long_text', 'a_new_hardlink')
+
+        snapshot(TARGET_DIR, 666)
+
+        with mounted_filesystem(TARGET_DIR, MOUNT_PATH, 666):
+            assert_file_contents_equal('a_new_hardlink', 'long_text')
+            add_string_to_file('a_new_hardlink', 'HARDLINK_ADDITION')
+            rm('long_text')
+
+        with mounted_filesystem(TARGET_DIR, MOUNT_PATH, backup_id=666, version=version):
+            assert_file_contents_equal('a_new_hardlink', os.path.join(DATA_DIR, 'long_text'))
+
+
+        check_tmp_dir(TARGET_DIR)
+        clean_up_env()
+
 
     def test_diff_files(self):
         snapshot(TARGET_DIR, 666)
@@ -161,7 +200,25 @@ class CozyFSTest(unittest.TestCase):
             copy(os.path.join(DATA_DIR, 'changed-more-version'), 'mycopy')
             assert_file_in_pool_is_diff('mycopy',
                                 os.path.join(DATA_DIR, 'long_text_with_change'), os.path.join(DATA_DIR, 'changed-more-version'))
+        check_tmp_dir(TARGET_DIR)
+        clean_up_env()
+
+    def test_simple_diff_files(self):
+        with mounted_filesystem(TARGET_DIR, MOUNT_PATH, 666):
+            copy(os.path.join(DATA_DIR, 'long_text'), 'myfile')
+
+        snapshot(TARGET_DIR, 666)
+
+        with mounted_filesystem(TARGET_DIR, MOUNT_PATH, 666):
+            copy(os.path.join(DATA_DIR, 'long_text_with_change'), 'myfile')
+            assert_file_in_pool_is_diff('myfile',
+                                os.path.join(DATA_DIR, 'long_text'), os.path.join(DATA_DIR, 'long_text_with_change'))
+
+        check_tmp_dir(TARGET_DIR)
+        clean_up_env()
 
 
 if __name__ == '__main__':
-    unittest.main()
+    suite = unittest.TestSuite((CozyFSTest('test_simple_diff_files'),))
+    unittest.TextTestRunner().run(suite)
+#    unittest.main(argv=('CozyFSTest.test_diff_files',))

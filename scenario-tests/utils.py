@@ -45,6 +45,7 @@ def make_cozyfs(target_dir, backup_id):
     cmdline = [MKFS_PATH, target_dir, str(backup_id)]
     log.info(' '.join(cmdline))
     subprocess.check_call(cmdline, stdout=subprocess.PIPE)
+    time.sleep(1) # we don't want the next snapshot have the same version accidently. Needs improvement
 
 
 @contextmanager
@@ -58,7 +59,8 @@ def mounted_filesystem(device_dir, mount_point, backup_id, version=None, as_read
 def mount(device_dir, mount_point, backup_id, version=None, as_readonly=False):
     cmdline = build_mount_cmdline(device_dir, mount_point, backup_id, version, as_readonly)
     log.info(' '.join(cmdline))
-    process = subprocess.Popen(cmdline, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+# IMPORTANT: DO NOT SWALLOW STDOUT HERE: it will block cozyfs.py
+    process = subprocess.Popen(cmdline)#, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     process.args = cmdline
     try:
         wait_until(is_mounted, mount_point)
@@ -116,7 +118,7 @@ def snapshot(target_dir, backup_id):
     log.info(' '.join(cmdline))
     process = subprocess.Popen(cmdline, stdout=subprocess.PIPE)
     version = process.communicate()[0]
-    log.debug('Returned version: ' + version)
+    log.info('Returned version: ' + version)
     return version
 
 def assert_exists(path):
