@@ -44,8 +44,11 @@ def make_cozyfs(target_dir, backup_id):
     os.mkdir(target_dir)
     cmdline = [MKFS_PATH, target_dir, str(backup_id)]
     log.info(' '.join(cmdline))
-    subprocess.check_call(cmdline, stdout=subprocess.PIPE)
+    version = subprocess.Popen(cmdline, stdout=subprocess.PIPE).communicate()[0]
+#    version = subprocess.check_call(cmdline, stdout=subprocess.PIPE)
     time.sleep(1) # we don't want the next snapshot have the same version accidently. Needs improvement
+    print version
+    return version
 
 
 @contextmanager
@@ -148,22 +151,12 @@ def binary_dump(binary_data):
             sys.stderr.write(c)
 
 def assert_file_in_pool_is_diff(file, original, new):
-    filename_in_pool = md5sum(original)
-    with open(os.path.join(TARGET_DIR, 'FilePool', filename_in_pool), 'rb') as file_in_pool:
-        content_of_file_in_pool = file_in_pool.read()
-    size_of_file_in_pool = len(content_of_file_in_pool)
-
-    (fd, filename_expected) = tempfile.mkstemp()
-    subprocess.check_call(['xdelta3', '-f', '-e', '-s', new, original, filename_expected])
-    with open(filename_expected, 'rb') as filehandle_expected:
-        expected_content = filehandle_expected.read()
-        expected_size = len(expected_content)
-    os.remove(filename_expected)
-    if not binary_diffs_equal(expected_content, content_of_file_in_pool):
-        log.debug('File in pool is not a diff: ' + file + '\n' +
-                          expected_content + '\n\n!=\n\n' + content_of_file_in_pool)
-        raise Exception('File in pool is not a diff: ' + file)
-#    if abs(expected_size - size_of_file_in_pool) > 120:
+    tmp = '/tmp/cozy-tmp_file'
+    hash = md5sum(original)
+    diff_file_in_pool = os.path.join(TARGET_DIR, 'FilePool', hash)
+    subprocess.check_call(['xdelta3', '-f', '-d', '-s', new, diff_file_in_pool, tmp])
+    assert_file_contents_equal(original, tmp)
+    os.remove(tmp)
 
 
 def mkdir(path):

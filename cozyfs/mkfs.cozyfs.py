@@ -54,7 +54,7 @@ def create_tables_if_not_existent(db):
 
     db.executescript("""
     CREATE TABLE IF NOT EXISTS Versions (backup_id NUMERIC, version NUMERIC, based_on_version NUMERIC);
-    CREATE TABLE IF NOT EXISTS data_id (backup_id NUMERIC, version NUMERIC, data_id NUMERIC, inode NUMERIC);
+    CREATE TABLE IF NOT EXISTS data (backup_id NUMERIC, version NUMERIC, data TEXT, inode NUMERIC);
     CREATE TABLE IF NOT EXISTS type (backup_id NUMERIC, version NUMERIC, type NUMERIC, inode NUMERIC);
     CREATE TABLE IF NOT EXISTS Nodes (backup_id NUMERIC, version NUMERIC, nodename TEXT, parent_node_id NUMERIC, node_id NUMERIC, inode_number NUMERIC);
     CREATE TABLE IF NOT EXISTS atime (atime NUMERIC, version NUMERIC, backup_id NUMERIC, inode NUMERIC);
@@ -64,7 +64,7 @@ def create_tables_if_not_existent(db):
     CREATE TABLE IF NOT EXISTS mtime (backup_id NUMERIC, version NUMERIC, inode NUMERIC, mtime NUMERIC);
     CREATE TABLE IF NOT EXISTS size (backup_id NUMERIC, version NUMERIC, inode NUMERIC, size NUMERIC);
     CREATE TABLE IF NOT EXISTS uid (backup_id NUMERIC, version NUMERIC, inode NUMERIC, uid NUMERIC);
-    CREATE TABLE IF NOT EXISTS FileDiffDependencies (data_id NUMERIC, hash TEXT, based_on_hash TEXT, data_path TEXT, data_size NUMERIC);
+    CREATE TABLE IF NOT EXISTS Chunks (hash TEXT, based_on_hash TEXT, plain_path TEXT, size NUMERIC);
     """)
 
     db.commit()
@@ -73,7 +73,7 @@ def backup_id_exists_already(db, backup_id):
     return db.execute('SELECT count(*) FROM Versions WHERE backup_id=?', (backup_id,)).fetchone()[0] > 0
 
 def delete_backup_ids(db, backup_id):
-    db.execute('DELETE FROM data_path WHERE backup_id = ?', (backup_id,))
+    db.execute('DELETE FROM data WHERE backup_id = ?', (backup_id,))
     db.execute('DELETE FROM Nodes WHERE backup_id = ?', (backup_id,))
     db.execute('DELETE FROM Versions WHERE backup_id = ?', (backup_id,))
     db.execute('DELETE FROM type WHERE backup_id = ?', (backup_id,))
@@ -84,7 +84,6 @@ def delete_backup_ids(db, backup_id):
     db.execute('DELETE FROM mode WHERE backup_id = ?', (backup_id,))
     db.execute('DELETE FROM mtime WHERE backup_id = ?', (backup_id,))
     db.execute('DELETE FROM size WHERE backup_id = ?', (backup_id,))
-    db.execute('DELETE FROM FileDiffDepencies', (backup_id,))
 
     db.commit()
 

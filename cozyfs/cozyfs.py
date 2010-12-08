@@ -104,7 +104,7 @@ class Stat(fuse.Stat):
 
 
 class Inode(object):
-    def __init__(self, inode_number=None, **attributes):
+    def __init__(self, inode_number, **attributes):
         self.inode_number = inode_number
         self.attributes = attributes
         self.changed_attributes = {}
@@ -126,29 +126,21 @@ class InodesRepository(object):
         self.storage = storage
         self.versions = versions
         self.backup_id = backup_id
-        self.attributes_names = ['size', 'atime', 'mtime', 'ctime', 'mode', 'uid', 'gid', 'type', 'data_id']
-        self.cached_inodes = {0: Inode(inode_number=0, size=4096, atime=0, mtime=0, ctime=0, mode=0, uid=0, gid=0, type=DIRECTORY) }
+        self.attributes_names = ['size', 'atime', 'mtime', 'ctime', 'mode', 'uid', 'gid', 'type', 'data']
+        self.cached_inodes = dict()
+        self.cached_inodes[0] = Inode(inode_number=0, size=4096, atime=0, mtime=0, ctime=0, mode=0, uid=0, gid=0, type=DIRECTORY)
+        self.log = logging.getLogger('cozyfs')
 
-    def serialize(self, inode):
-        if inode.inode_number is None:
-            inode.inode_number = self.__get_new_inode_number()
-            for (name, value) in inode.attributes.iteritems():
-                self.__insert_attribute(inode.inode_number, name, value)
-        else:
-            for (name, value) in inode.attributes.iteritems():
-                if self.__attribute_exists_in_current_version(inode.inode_number, name):
-                    self.__update_attribute(inode.inode_number, name, value)
-                else:
-                    self.__insert_attribute(inode.inode_number, name, value)
-        self.cached_inodes[inode.inode_number] = inode
+    def insert(self, inode):
+        inode_number = self.__get_new_inode_number()
+        inode.inode_number = inode_number
+        for (name, value) in inode.attributes.iteritems():
+            self.insert_attribute(inode_number, name, value)
+        self.cached_inodes[inode_number] = inode
 
-    def __insert_attribute(self, inode, name, value):
+    def insert_attribute(self, inode_number, name, value):
         self.storage.db_execute('INSERT INTO ' + name + ' (' + name + ',inode,backup_id,version) VALUES (?,?,?,?)',
-                                (value, inode, self.backup_id, self.versions[0]))
-
-    def __update_attribute(self, inode, name, value):
-        self.storage.db_execute('UPDATE ' + name + ' SET ' + name + '=?, backup_id=?, version=? WHERE inode=?',
-                                (value, self.backup_id, self.versions[0], inode))
+                                (value, inode_number, self.backup_id, self.versions[0]))
 
     def __get_new_inode_number(self):
         max_inode_number = self.storage.db_execute('select max(inode_number) from Nodes').fetchone()[0]
@@ -161,48 +153,48 @@ class InodesRepository(object):
             self.cached_inodes[inode_number] = inode
         return self.cached_inodes[inode_number]
 
+    def attribute_has_previous_versions(self, inode_number, attribute):
+        cursor = self.storage.db_execute("SELECT count(*) FROM " + attribute + " WHERE inode = ? AND version <> ? and "
+                                         + self.__backup_id_versions_where_statement(attribute), (inode_number, self.versions[0]))
+        return cursor.fetchone()[0]
+
     def __inode_from_inode_number_from_database(self, inode_number):
-        assert inode_number
-        inode = Inode(inode_number=inode_number)
+        attributes = {}
         for attribute_name in self.attributes_names:
             cursor = self.storage.db_execute("SELECT %(attr_name)s FROM %(attr_name)s WHERE inode=? AND %(where)s ORDER BY version DESC" %
                                      {'attr_name': attribute_name,
                                       'where': self.__backup_id_versions_where_statement(attribute_name)},
                                      (inode_number,))
-            inode[attribute_name] = cursor.fetchone()[0]
-        return inode
+            attributes[attribute_name] = cursor.fetchone()[0]
+        return Inode(inode_number, **attributes)
 
-    #deprecated
-    def previous_data_id_version_of_inode(self, inode):
-        return self.storage.db_execute("select data_id from data_id where inode = ? and version <> ? and " + self.__backup_id_versions_where_statement('data_id') + " order by version desc",
-                               (inode.inode_number, self.versions[0])).fetchone()[0]
+    def inode_of_previous_version_from_inode_number(self, inode_number):
+        attributes = {}
+        for attribute_name in self.attributes_names:
+            cursor = self.storage.db_execute("SELECT %(attr_name)s FROM %(attr_name)s WHERE inode=? AND %(where)s AND version <> ? ORDER BY version DESC" %
+                                     {'attr_name': attribute_name,
+                                      'where': self.__backup_id_versions_where_statement(attribute_name)},
+                                     (inode_number, self.versions[0]))
+            attributes[attribute_name] = cursor.fetchone()[0]
+        return Inode(inode_number, **attributes)
 
-    #deprecated
-    def data_has_base_data(self, inode_number):
-        cursor = self.storage.db_execute("select count(*) from data_id where inode = ? and version <> ? and " + self.__backup_id_versions_where_statement('data_id'), (inode_number, self.versions[0]))
-        return cursor.fetchone()[0]
-
-    # deprecated
-    def data_id_not_used_anymore(self, data_id):
-        count = self.storage.db_execute("select count(*) from data where data_id=?", (data_id,)).fetchone()[0]
-        return count == 0
 
     def __backup_id_versions_where_statement(self, table_name):
         return " (" + table_name + ".backup_id = " + self.backup_id + " AND (" + (table_name + ".version = ") + (" or " + table_name + ".version = ").join(map(str, self.versions)) + ") ) "
 
     def update_inode_in_place(self, inode_number, attributes):
         for (attribute, val) in attributes.iteritems():
-            if self.__attribute_exists_in_current_version(inode_number, attribute):
-                query = 'update ' + attribute + ' set ' + attribute + ' = ? where inode=? and backup_id=? and version=?'
+            if self.attribute_exists_in_current_version(inode_number, attribute):
+                query = 'UPDATE ' + attribute + ' SET ' + attribute + ' = ? WHERE inode=? AND backup_id=? AND version=?'
             else:
-                query = 'insert into ' + attribute + ' (' + attribute + ',inode,backup_id,version) values (?,?,?,?)'
+                query = 'INSERT INTO ' + attribute + ' (' + attribute + ',inode,backup_id,version) VALUES (?,?,?,?)'
 
             if self.cached_inodes.has_key(inode_number):
                 self.cached_inodes[inode_number][attribute] = val
 
             self.storage.db_execute(query, (val, inode_number, self.backup_id, self.versions[0]))
 
-    def __attribute_exists_in_current_version(self, inode_number, attribute):
+    def attribute_exists_in_current_version(self, inode_number, attribute):
         cursor = self.storage.db_execute('select count(*) from ' + attribute + ' where inode = ? and backup_id = ? and version = ?', (inode_number, self.backup_id, self.versions[0]))
         return cursor.fetchone()[0]
 
@@ -214,72 +206,46 @@ class InodesRepository(object):
     def __delete_attribute(self, inode_number, name):
         self.storage.db_execute('DELETE FROM ' + name + ' WHERE inode = ?', (inode_number,))
 
+#    def data_id_not_used_anymore(self, data_id):
+#        count = self.storage.db_execute("select count(*) from hash where data_id=?", (data_id,)).fetchone()[0]
+#        return count == 0
+
 
 class Node(object):
-    def __init__(self, path, inode, node_id=None, parent_node_id=None):
+    def __init__(self, path, inode_number, node_id=None, parent_node_id=None):
         self.node_id = node_id
         self.path = path
         self.parent_node_id = parent_node_id
-        self.inode = inode
+        self.inode_number = inode_number
 
     def __str__(self):
         return "<node_id: %s , path: %s , parent_node_id: %s , inode_number: %s>" % \
-                (str(self.node_id), self.path, str(self.parent_node_id), str(self.inode.inode_number))
+                (str(self.node_id), self.path, str(self.parent_node_id), str(self.inode_number))
 
 
 class NodesRepository(object):
-    def __init__(self, storage, versions, backup_id, inodes):
+    def __init__(self, storage, versions, backup_id):
         self.storage = storage
         self.versions = versions
         self.backup_id = backup_id
         self.log = logging.getLogger('cozyfs')
-        self.cached_nodes = {'/': Node(path='/', inode=Inode(inode_number=0, size=4096,
-                                               atime=0, mtime=0, ctime=0, mode=0, uid=0, gid=0, type=DIRECTORY),
-                                               node_id=0, parent_node_id=None)}
-        self.inodes = inodes
+        self.cached_nodes = {}
+        root_node = Node(path='/', inode_number=0)
+        root_node.node_id = 0
+        root_node.parent_node_id = None
+        self.cached_nodes['/'] = root_node
 
     def insert(self, node):
-        self.inodes.serialize(node.inode)
-
+        node.node_id = self.__get_new_node_id()
         dirname, basename = path_split(node.path)
         parent_node = self.node_from_path(dirname)
-
-        node.node_id = self.__get_new_node_id()
         query = 'INSERT INTO Nodes (backup_id,version,nodename,node_id,parent_node_id, inode_number) VALUES (?,?,?,?,?,?)'
-        self.storage.db_execute(query, (self.backup_id, self.versions[0], basename, node.node_id, parent_node.node_id, node.inode.inode_number))
+        self.storage.db_execute(query, (self.backup_id, self.versions[0], basename, node.node_id, parent_node.node_id, node.inode_number))
+
         self.cached_nodes[node.path] = node
-
-    def rename(self, node, old_path):
-        self.inodes.serialize(node.inode)
-        basename = path_basename(node.path)
-        if self.__has_current_node(node.node_id):
-            self.storage.db_execute("UPDATE Nodes SET nodename = ?, parent_node_id = ? WHERE node_id = ? and backup_id = ? and version = ?", (basename, node.parent_node_id, node.node_id, self.backup_id, self.versions[0]))
-        else:
-            self.storage.db_execute("INSERT INTO Nodes (backup_id, version, node_id, nodename, parent_node_id, inode_number) values (?,?,?,?,?,?) ", (self.backup_id, self.versions[0], node.node_id, basename, node.parent_node_id, node.inode.inode_number))
-
-        del self.cached_nodes[old_path]
-        self.cached_nodes[node.path] = node
-
-    def remove(self, path):
-        node = self.node_from_path(path)
-        if self.__has_current_node(node.node_id):
-            if self.__node_has_base_nodes(node.node_id):
-                self.storage.db_execute("UPDATE Nodes SET nodename = ?, parent_node_id = ? WHERE node_id = ? and backup_id = ? and version = ?", ('', node.parent_node_id, node.node_id, self.backup_id, self.versions[0]))
-            else:
-                self.storage.db_execute("DELETE FROM Nodes WHERE node_id = ? and backup_id = ? and version = ?", (node.node_id, self.backup_id, self.versions[0]))
-        else:
-            self.storage.db_execute("INSERT INTO Nodes (backup_id, version, node_id, nodename, parent_node_id, inode_number) values (?,?,?,?,?,?) ", (self.backup_id, self.versions[0], node.node_id, '', 0, 0))
-
-        if self.__inode_not_used_anymore(node.inode):
-            file_system_object_type = node.inode["type"]
-            self.inodes.delete_inode(node.inode.inode_number)
-            if file_system_object_type == FILE:
-                self.__remove_data_path_recursively(node.inode['data_id'])
-
-        del self.cached_nodes[node.path]
 
     def __get_new_node_id(self):
-        ret = self.storage.db_execute('SELECT max(node_id) FROM Nodes').fetchone()
+        ret = self.storage.db_execute('select max(node_id) from Nodes').fetchone()
         if ret[0] == None:
             return 1
         else:
@@ -313,20 +279,35 @@ class NodesRepository(object):
         if row is None:
             return None
         else:
-            return Node(path, self.inodes.inode_from_inode_number(row['inode_number']), row['node_id'], parent_node_id)
+            return Node(path, row['inode_number'], row['node_id'], parent_node_id)
 
     def __backup_id_versions_where_statement(self, table_name):
         return " (" + table_name + ".backup_id = " + self.backup_id + " AND (" + (table_name + ".version = ") + (" or " + table_name + ".version = ").join(map(str, self.versions)) + ") ) "
+
+    def update_node(self, node, old_path):
+        basename = path_basename(node.path)
+        if self.__has_current_node(node.node_id):
+            self.storage.db_execute("update Nodes set nodename = ?, parent_node_id = ? where node_id = ? and backup_id = ? and version = ?", (basename, node.parent_node_id, node.node_id, self.backup_id, self.versions[0]))
+        else:
+            self.storage.db_execute("insert into Nodes (backup_id, version, node_id, nodename, parent_node_id, inode_number) values (?,?,?,?,?,?) ", (self.backup_id, self.versions[0], node.node_id, basename, node.parent_node_id, node.inode_number))
+
+        del self.cached_nodes[old_path]
+        if node.path != '':
+            self.cached_nodes[node.path] = node
 
     def __has_current_node(self, node_id):
         row = self.storage.db_execute("select count(*) from Nodes where node_id = ? and backup_id = ? and version = ?", (node_id, self.backup_id, self.versions[0])).fetchone()
         return row[0]
 
-    def __node_has_base_nodes(self, node_id):
+    def node_has_base_nodes(self, node_id):
         cursor = self.storage.db_execute("select count(*) from Nodes where node_id = ? and version <> ? and " + self.__backup_id_versions_where_statement('Nodes'), (node_id, self.versions[0]))
         return cursor.fetchone()[0]
 
-    def __inode_not_used_anymore(self, inode):
+    def delete_node(self, node):
+        self.storage.db_execute("delete from Nodes where backup_id=? and version=? and node_id=?", (self.backup_id, self.versions[0], node.node_id))
+        del self.cached_nodes[node.path]
+
+    def inode_not_used_anymore(self, inode):
         count = self.storage.db_execute("select count(*) from Nodes where inode_number=?", (inode.inode_number,)).fetchone()[0]
         return count == 0
 
@@ -394,20 +375,9 @@ class PlainPath(object):
 
 
 class OpenFileInReadMode(BasicOpenFile):
-    def __init__(self, storage, data_id, file_diff_dependencies):
+    def __init__(self, storage, working_data_path):
         BasicOpenFile.__init__(self, storage)
-
-        file_diff_dependency_chain = file_diff_dependencies.dependency_chain(data_id)
-        if file_diff_dependency_chain.has_more_than_one_element():
-#            file_diff_entry = file_diff_dependencies.entry_from_data_id(data_id)
-            self.working_data_path = TemporaryPath(data_id + '.' + uuid4(), storage)
-            file_diff_dependency_chain.apply_patches_and_save_as(storage.real_path(self.data_path))
-        else:
-            file_diff_entry = file_diff_dependencies.entry_from_data_id(data_id)
-            if file_diff_entry.data_path is None:
-                self.working_data_path = PermanentPath(file_diff_entry.hash)
-            else:
-                self.working_data_path = PlainPath(file_diff_entry.data_path)
+        self.working_data_path = working_data_path
         self.file_handle = self.storage.open_file(self.working_data_path, 'r')
 
     def read(self, length, offset):
@@ -423,14 +393,13 @@ class OpenFileInReadMode(BasicOpenFile):
                 (self.working_data_path, self.file_handle)
 
 class OpenFileInWriteMode(BasicOpenFile):
-    def __init__(self, storage, data_id, flushing_strategy, file_diff_dependencies):
+    def __init__(self, storage, chunks, plain_path, tmp_path, previous_version_inode):
         BasicOpenFile.__init__(self, storage)
-        self.flushing_strategy = flushing_strategy
-        self.file_diff_dependencies = file_diff_dependencies
-        self.data_id = data_id
-        file_diff_entry = file_diff_dependencies.entry_from_data_id(data_id)
-        self.working_data_path = PlainPath(file_diff_entry.data_path)
-        self.file_handle = self.storage.open_file(self.working_data_path, 'w')
+        self.chunks = chunks
+        self.previous_version_inode = previous_version_inode
+        self.plain_path = plain_path
+        self.tmp_path = tmp_path
+        self.file_handle = self.storage.open_file(self.plain_path, 'w')
 
     def write(self, buf, offset):
         self.file_handle.seek(offset)
@@ -438,237 +407,20 @@ class OpenFileInWriteMode(BasicOpenFile):
 
     def flush(self):
         self.file_handle.flush()
-        new_hash = md5sum(self.storage.real_path(self.working_data_path))
-        new_size = self.storage.file_size_of(self.working_data_path)
-        self.file_diff_dependencies.update_hash(self.data_id, new_hash)
-        self.file_diff_dependencies.update_size(self.data_id, new_size)
-        self.flushing_strategy.flush(new_hash, self.working_data_path)
-        return self.storage.file_size_of(self.working_data_path)
+        new_hash = md5sum(self.storage.real_path(self.plain_path))
+        new_size = self.storage.file_size_of(self.plain_path)
+        self.chunks.update_hash_and_size_by_plain_path(self.plain_path, new_hash, new_size)
+        if self.tmp_path is not None:
+            self.__create_diff_and_copy_to_permanent(new_hash)
+        return new_size, new_hash
 
-    def close(self):
-        self.file_handle.close()
-        self.flushing_strategy.close()
-        # probably don't have to call this here:
-        #self.working_data_path.release()
-
-    def __str__(self):
-        return "<OpenFileInWriteMode: working_data_path: %s , file_handle: %s>" % \
-                (self.working_data_path, self.file_handle)
-
-
-class OpenFileInReadWriteMode(OpenFileInReadMode, OpenFileInWriteMode):
-    def __init__(self, storage, data_id, flushing_strategy, file_diff_dependencies):
-        BasicOpenFile.__init__(self, storage)
-        self.file_diff_dependencies = file_diff_dependencies
-        self.data_id = data_id
-        file_diff_entry = file_diff_dependencies.entry_from_data_id(data_id)
-        self.flushing_strategy = flushing_strategy
-        self.working_data_path = PlainPath(file_diff_entry.data_path)
-        self.file_handle = self.storage.open_file(self.working_data_path, 'r+')
-
-    def __str__(self):
-        return "<OpenFileInReadWriteMode: working_data_path: %s , file_handle: %s>" % \
-                (self.working_data_path, self.file_handle)
-
-    def close(self):
-        OpenFileInWriteMode.close(self)
-
-class FileDiffDependencyChain(object):
-    def __init__(self, storage, hash):
-        self.storage = storage
-        self.hash = hash
-
-#FIXME: __depency_chain is very expensive and should not be called twice.
-    def has_more_than_one_element(self): # FIXME: rename contains_at_least_one_diff
-        return len(self.__dependency_chain()) > 1
-
-    def apply_patches_and_save_as(self, target_path):
-        reverse_hash_dep_chain = self.__dependency_chain()
-        reverse_hash_dep_chain.reverse()
-
-        real_base_path = self.storage.real_path('perm/' + reverse_hash_dep_chain[0])
-
-        if self.__dep_chain_includes_more_than_1_diff(reverse_hash_dep_chain):
-            merged_diff_path = self.__merge_diffs(reverse_hash_dep_chain, target_path)
-            real_merged_diff_path = self.storage.real_path(merged_diff_path)
-            cmdline = ['xdelta3', '-f', '-d', '-s', real_base_path, real_merged_diff_path, self.storage.real_path(target_path)]
-            xdelta3.xd3_main_cmdline(cmdline)
-            self.storage.remove_file(merged_diff_path)
-        elif len(reverse_hash_dep_chain) == 2:
-            real_merged_diff_path = self.storage.real_path('perm/' + reverse_hash_dep_chain[1])
-            cmdline = ['xdelta3', '-f', '-d', '-s', real_base_path, real_merged_diff_path, self.storage.real_path(target_path)]
-            xdelta3.xd3_main_cmdline(cmdline)
-
-    def __dependency_chain(self):
-        hash = self.hash
-        hash_dep_chain = [hash]
-        while True:
-            row = self.storage.db_execute("SELECT based_on_hash FROM FileDiffDependencies WHERE hash = ?", (hash,)).fetchone()
-            if row is None or row[0] is None or row[0] == '':
-                break
-            else:
-                hash = row[0]
-                hash_dep_chain.append(hash)
-        return hash_dep_chain
-
-    def __dep_chain_includes_more_than_1_diff(self, reverse_data_path_dep_chain):
-        return len(reverse_data_path_dep_chain) > 2
-
-    def __merge_diffs(self, reverse_data_path_dep_chain, target_path):
-        diff_merge_cmdline = ['xdelta3', 'merge']
-        for diff_path in reverse_data_path_dep_chain[1:-1]:
-            real_diff_path = self.storage.real_path('perm/' + diff_path)
-            diff_merge_cmdline.extend(['-m', real_diff_path])
-        real_final_diff_path = self.storage.real_path('perm/' + reverse_data_path_dep_chain[-1])
-        merged_diff_path = 'tmp/' + target_path + 'merged_diff' + uuid4()
-        diff_merge_cmdline.extend([real_final_diff_path, self.storage.real_path(merged_diff_path)])
-        xdelta3.xd3_main_cmdline(diff_merge_cmdline)
-        return merged_diff_path
-
-class FileDiffEntry(object):
-    def __init__(self, data_id, hash, based_on_hash, data_path, size):
-        self.data_id = data_id
-        self.hash = hash
-        self.based_on_hash = based_on_hash
-        self.data_path = data_path
-        self.size = size
-
-    def __str__(self):
-        return 'data_id: %d, hash: %s, based_on_hash: %s, data_path: %s, size: %s' % (
-                self.data_id, self.hash, self.based_on_hash, self.data_path, self.size)
-
-class FileDiffDependencies(object):
-    def __init__(self, storage):
-        self.storage = storage
-
-    def __get_new_data_id(self):
-        max_data_id = self.storage.db_execute('select max(data_id) from FileDiffDependencies').fetchone()[0]
-        if max_data_id == None: max_data_id = 0
-        return max_data_id + 1
-
-#    def hash_exists_already(self, hash):
-#        return self.storage.db_execute('SELECT count(*) FROM FileDiffDependencies WHERE hash = ?', (hash,)).fetchone()[0]
-
-    def entry_from_data_id(self, data_id):
-        row = self.storage.db_execute('SELECT * FROM FileDiffDependencies WHERE data_id = ?', (data_id,)).fetchone()
-        file_diff_entry = FileDiffEntry(row['data_id'], row['hash'], row['based_on_hash'], row['data_path'], row['data_size'])
-        assert row['data_path'] != ''
-        return file_diff_entry
-
-    def update_hash(self, data_id, hash):
-        self.storage.db_execute('UPDATE FileDiffDependencies SET hash = ? WHERE data_id = ?', (hash, data_id))
-
-    def update_size(self, data_id, size):
-        self.storage.db_execute('UPDATE FileDiffDependencies SET data_size = ? WHERE data_id = ?', (size, data_id))
-
-    def update_data_path(self, data_id, data_path):
-        self.storage.db_execute('UPDATE FileDiffDependencies SET data_path = ? WHERE data_id = ?', (data_path, data_id))
-
-    def update_based_on_hash(self, data_id, based_on_hash):
-        self.storage.db_execute('UPDATE FileDiffDependencies SET based_on_hash = ? WHERE data_id = ?', (based_on_hash, data_id))
-
-#    def update(self, data_path, based_on_data_path):
-#        self.storage.db_execute('UPDATE FileDiffDependencies SET based_on_data_path = ? WHERE data_path = ?',
-#                                (based_on_data_path, data_path))
-
-    def remove_and_handle_data_path(self, data_id):
-        entry = self.entry_from_data_id(data_id)
-#        hash = self.storage.db_execute("SELECT hash FROM FileDiffDependencies WHERE data_id = ?", (data_id,)).fetchone()[0]
-        count = self.storage.db_execute("SELECT count(*) FROM FileDiffDependencies WHERE data_path = ?", (entry.data_path,)).fetchone()[0]
-        if count > 0:
-            # NOTE: we could *move* the file so we don't have to copy it (*remove*
-            # it in the else block. That would be faster.
-            # But we'd like to keep the operations on the plain filesystem in
-            # a delegating way in CozyFS. This is less error prone. And avoiding corruption
-            # in the plain filesystem is the highest goal.
-            self.storage.copy_file(PlainPath(entry.data_path), PermanentPath(entry.hash))
-            self.storage.db_execute("UPDATE FileDiffDependencies SET data_path = NULL WHERE data_path = ?", (entry.data_path,))
-        else:
-            self.storage.db_execute("DELETE FROM FileDiffDependencies WHERE data_id = ?", (data_id,))
-
-
-    def insert(self, hash, based_on_hash, data_path):
-        new_data_id = self.__get_new_data_id()
-        self.storage.db_execute('INSERT INTO FileDiffDependencies (data_id, hash, based_on_hash, data_path) VALUES (?, ?, ?, ?)',
-                                (new_data_id, hash, based_on_hash, data_path))
-        return new_data_id
-
-    def dependency_chain(self, hash):
-        return FileDiffDependencyChain(self.storage, hash)
-
-    def no_hash_dependent_anymore_on(self, hash):
-        return self.storage.db_execute('SELECT count(*) FROM FileDiffDependencies WHERE based_on_hash = ?', (hash,)).fetchone()[0]
-
-    def delete_element(self, hash):
-        self.storage.db_execute('DELETE FROM FileDiffDependencies WHERE hash=?', (hash,))
-
-    def base_of(self, hash):
-        row = self.storage.db_execute("SELECT based_on_hash FROM FileDiffDependencies WHERE hash = ?", (hash,)).fetchone()
-        if row is None or row[0] is None or row[0] == '':
-            return None
-        else:
-            return row[0]
-
-class FlushingStrategyFactory(object):
-    def __init__(self, nodes, inodes, storage, file_diff_dependencies):
-        self.nodes = nodes
-        self.inodes = inodes
-        self.storage = storage
-        self.file_diff_dependencies = file_diff_dependencies
-
-    def createFlushingStrategy(self, node):
-        if self.inodes.data_has_base_data(node.inode.inode_number):
-            previous_data_id = self.inodes.previous_data_id_version_of_inode(node.inode)
-            if not self.inodes._InodesRepository__attribute_exists_in_current_version(node.inode.inode_number, 'data_id'):
-                file_diff_entry = self.file_diff_dependencies.entry_from_data_id(previous_data_id)
-
-                new_data_id = self.file_diff_dependencies.insert(file_diff_entry.hash, None, file_diff_entry.data_path)
-                self.file_diff_dependencies.update_data_path(previous_data_id, None)
-                self.file_diff_dependencies.update_hash(previous_data_id, file_diff_entry.hash)
-                self.file_diff_dependencies.update_based_on_hash(previous_data_id, file_diff_entry.hash)
-
-                self.storage.copy_file(PlainPath(file_diff_entry.data_path), PermanentPath(file_diff_entry.hash))
-
-                self.inodes.update_inode_in_place(node.inode.inode_number, {'data_id': new_data_id})
-
-            previous_data_id = self.inodes.previous_data_id_version_of_inode(node.inode)
-            return DiffFileFlushingStrategy(self.storage, self.file_diff_dependencies, node.inode['data_id'], previous_data_id)
-        else:
-            return PlainFileFlushingStrategy()
-
-class PlainFileFlushingStrategy(object):
-    def flush(self, new_hash, new_data_path):
-        pass
-
-    def close(self):
-        pass
-
-
-class DiffFileFlushingStrategy(object):
-    def __init__(self, storage, file_diff_dependencies, data_id, previous_data_id):
-        self.storage = storage
-        self.file_diff_dependencies = file_diff_dependencies
-        self.previous_data_id = previous_data_id
-        file_diff_entry = file_diff_dependencies.entry_from_data_id(previous_data_id)
-        previous_version_file_diff_dependency_chain = file_diff_dependencies.dependency_chain(previous_data_id)
-        if previous_version_file_diff_dependency_chain.has_more_than_one_element():
-            self.original_data_path = TemporaryPath(previous_data_id + '.orig.' + uuid4(), storage)
-            previous_version_file_diff_dependency_chain.apply_patches_and_save_as(self.original_data_path)
-        else:
-            self.original_data_path = PermanentPath(file_diff_entry.hash)
-
-        self.original_hash = file_diff_entry.hash
-        self.original_size = storage.file_size_of(self.original_data_path)
-
-
-    def flush(self, new_hash, working_data_path):
+    def __create_diff_and_copy_to_permanent(self, new_based_on_hash):
         diff_data_path = 'tmp/diff.%s' % uuid4()
-        self.__create_diff(working_data_path, self.original_data_path, diff_data_path)
+        self.__create_diff(self.plain_path, self.tmp_path, diff_data_path)
         diff_size = self.storage.file_size_of(diff_data_path)
-        if self.__size_of_diff_is_small_enough(diff_size, self.original_size):
-            self.storage.move_file(diff_data_path, 'perm/' + self.original_hash)
-            self.file_diff_dependencies.update_based_on_hash(self.previous_data_id, new_hash)
-            self.file_diff_dependencies.update_size(self.previous_data_id, diff_size)
+        if self.__size_of_diff_is_small_enough(diff_size, self.previous_version_inode['size']):
+            self.storage.move_file(diff_data_path, PermanentPath(self.previous_version_inode['data']))
+            self.chunks.update_based_on_hash(self.previous_version_inode['data'], new_based_on_hash)
         else:
             self.storage.remove_file(diff_data_path)
 
@@ -682,8 +434,180 @@ class DiffFileFlushingStrategy(object):
     def __size_of_diff_is_small_enough(self, size_of_diff, size_of_nondiff):
         return size_of_diff < size_of_nondiff * DIFF_LIMIT
 
+
     def close(self):
-        self.original_data_path.release()
+        self.file_handle.close()
+        self.plain_path.release()
+        if self.tmp_path is not None:
+            self.tmp_path.release()
+
+    def __str__(self):
+        return "<OpenFileInWriteMode: plain_path: %s, tmp_path: %s,file_handle: %s>" % \
+                (self.plain_path, self.tmp_path, self.file_handle)
+
+
+#class OpenFileInReadWriteMode(OpenFileInReadMode, OpenFileInWriteMode):
+#    def __init__(self, storage, data_id, flushing_strategy, chunks):
+#        BasicOpenFile.__init__(self, storage)
+#        self.chunks = chunks
+#        self.data_id = data_id
+#        file_diff_entry = chunks.entry_from_data_id(data_id)
+#        self.flushing_strategy = flushing_strategy
+#        self.working_data_path = PlainPath(file_diff_entry.data_path)
+#        self.file_handle = self.storage.open_file(self.working_data_path, 'r+')
+#
+#    def __str__(self):
+#        return "<OpenFileInReadWriteMode: working_data_path: %s , file_handle: %s>" % \
+#                (self.working_data_path, self.file_handle)
+#
+#    def close(self):
+#        OpenFileInWriteMode.close(self)
+
+class Patcher(object):
+    def __init__(self, storage):
+        self.storage = storage
+        self.log = logging.getLogger('cozyfs')
+
+    def __data_path(self, chunk):
+        if chunk.plain_path:
+            return 'perm/plain/' + chunk.plain_path
+        else:
+            return 'perm/' + chunk.hash
+
+    def apply_patches_and_save_as(self, chunk_chain, target_path):
+        self.log.debug('chunk_chain: ' + ' '.join(map(str, chunk_chain)) + ' target_path: ' + str(target_path))
+        real_base_path = self.storage.real_path(self.__data_path(chunk_chain[0]))
+
+        if len(chunk_chain) > 2:
+            merged_diff_path = self.__merge_diffs(chunk_chain, target_path)
+            real_merged_diff_path = self.storage.real_path(merged_diff_path)
+            cmdline = ['xdelta3', '-f', '-d', '-s', real_base_path, real_merged_diff_path, self.storage.real_path(target_path)]
+            xdelta3.xd3_main_cmdline(cmdline)
+            self.log.debug(' '.join(cmdline))
+            self.storage.remove_file(merged_diff_path)
+        elif len(chunk_chain) == 2:
+            real_merged_diff_path = self.storage.real_path(self.__data_path(chunk_chain[1]))
+            cmdline = ['xdelta3', '-f', '-d', '-s', real_base_path, real_merged_diff_path, self.storage.real_path(target_path)]
+            self.log.debug(' '.join(cmdline))
+            xdelta3.xd3_main_cmdline(cmdline)
+        else:
+            self.storage.copy_file(self.__data_path(chunk_chain[0]), target_path)
+
+    def __merge_diffs(self, reverse_data_path_dep_chain, target_path):
+        diff_merge_cmdline = ['xdelta3', 'merge']
+        for diff_path in reverse_data_path_dep_chain[1:-1]:
+            real_diff_path = self.storage.real_path(self.__data_path(diff_path))
+            diff_merge_cmdline.extend(['-m', real_diff_path])
+        real_final_diff_path = self.storage.real_path(self.__data_path(reverse_data_path_dep_chain[-1]))
+        merged_diff_path = str(target_path) + 'merged_diff' + str(uuid4())
+        diff_merge_cmdline.extend([real_final_diff_path, self.storage.real_path(merged_diff_path)])
+        xdelta3.xd3_main_cmdline(diff_merge_cmdline)
+        return merged_diff_path
+
+def dependency_chain(chunks, hash):
+    chunk = chunks.chunk_from_hash(hash)
+    result = [chunk]
+    while True:
+        based_on_hash = chunk.based_on_hash
+        if based_on_hash:
+            chunk = chunks.chunk_from_hash(based_on_hash)
+        else:
+            break
+        result.append(chunk)
+
+    result.reverse()
+    return result
+
+#FIXME: __depency_chain is very expensive and should not be called twice.
+def is_based_on_other_hash(chunks, hash): # FIXME: rename contains_at_least_one_diff
+    return len(dependency_chain(chunks, hash)) > 1
+
+class Chunk(object):
+    def __init__(self, hash, based_on_hash, plain_path, size):
+        self.hash = hash
+        self.based_on_hash = based_on_hash
+        self.plain_path = plain_path
+        self.size = size
+
+    def __str__(self):
+        return 'Chunk(hash: %s, based_on_hash: %s, plain_path: %s, size: %s)' % (
+                self.hash, self.based_on_hash, self.plain_path, self.size)
+
+class ChunkRepository(object):
+    def __init__(self, storage):
+        self.storage = storage
+
+    def chunk_from_hash(self, hash):
+# Note: sometimes we have the case that a chunk has a hash and is beased on the
+#       very same hash. Essentially that means that the chunk denotes a null
+#       diff. null diffs are removed with the next snapshot.
+#       However, before they're removed we simply want to ignore them completely
+#       Therefore the addtional condition:
+        row = self.storage.db_execute('SELECT * FROM Chunks WHERE hash = ? AND (based_on_hash ISNULL OR  based_on_hash <> ?)', (hash, hash)).fetchone()
+        chunk = Chunk(row['hash'], row['based_on_hash'], row['plain_path'], row['size'])
+        assert row['plain_path'] != ''
+        return chunk
+
+    def update_hash(self, old_hash, new_hash):
+        self.storage.db_execute('UPDATE Chunks SET hash = ? WHERE hash = ?', (new_hash, old_hash))
+
+    def update_size(self, hash, size):
+        self.storage.db_execute('UPDATE Chunks SET size = ? WHERE hash = ?', (size, hash))
+
+    def update_plain_path(self, hash, data_path):
+        self.storage.db_execute('UPDATE Chunks SET plain_path = ? WHERE hash = ?', (data_path, hash))
+
+    def update_based_on_hash(self, hash, based_on_hash):
+# Note: the following additional condition falls into the same category as the
+#       noted above. When we flush and the file is exactly the same as the
+#       previous version, we get a null diff and identical hashes. However,
+#       we only want to update diff hash and not the one with the plain_path.
+        self.storage.db_execute('UPDATE Chunks SET based_on_hash = ? WHERE hash = ? AND plain_path ISNULL', (based_on_hash, hash))
+
+    def update_hash_and_size_by_plain_path(self, plain_path, hash, size):
+        self.storage.db_execute('UPDATE Chunks SET hash = ?, size = ? WHERE plain_path = ?', (hash, size, str(plain_path).replace('perm/plain/', '')))
+
+    def clear_plain_path(self, plain_path):
+        self.storage.db_execute('UPDATE Chunks SET plain_path = null WHERE plain_path = ?', (plain_path,))
+
+    def remove_chunk_by_plain_path(self, plain_path):
+        self.storage.db_execute('DELETE FROM Chunks WHERE plain_path = ?', (plain_path,))
+
+#    def remove_and_handle_plain_path(self, hash):
+#        chunk = self.chunk_from_hash(hash)
+##        hash = self.storage.db_execute("SELECT hash FROM Chunks WHERE data_id = ?", (data_id,)).fetchone()[0]
+#        count = self.storage.db_execute("SELECT count(*) FROM Chunks WHERE chunks_path = ?", (chunk.plain_path,)).fetchone()[0]
+#        if count > 0:
+#            # NOTE: we could *move* the file so we don't have to copy it (*remove*
+#            # it in the else block. That would be faster.
+#            # But we'd like to keep the operations on the plain filesystem in
+#            # a delegating way in CozyFS. This is less error prone. And avoiding corruption
+#            # in the plain filesystem is the highest goal.
+#            self.storage.copy_file(PlainPath(chunk.plain_path), PermanentPath(chunk.hash))
+#            self.storage.db_execute("UPDATE Chunks SET plain_path = NULL WHERE plain_path = ?", (chunk.plain_path,))
+#        else:
+#            self.storage.db_execute("DELETE FROM Chunks WHERE hash = ?", (hash,))
+
+    def insert(self, chunk):
+        self.storage.db_execute('INSERT INTO Chunks (hash, based_on_hash, plain_path, size) VALUES (?, ?, ?, ?)',
+                                (chunk.hash, chunk.based_on_hash, chunk.plain_path, chunk.size))
+
+    def no_hash_dependent_anymore_on(self, hash):
+        return self.storage.db_execute('SELECT count(*) FROM Chunks WHERE based_on_hash = ?', (hash,)).fetchone()[0]
+
+    def remove_chunk(self, hash):
+        self.storage.db_execute('DELETE FROM Chunks WHERE hash = ? AND plain_path ISNULL', (hash,))
+
+    def base_of(self, hash):
+        row = self.storage.db_execute("SELECT based_on_hash FROM Chunks WHERE hash = ?", (hash,)).fetchone()
+        if row is None or row[0] is None or row[0] == '':
+            return None
+        else:
+            return row[0]
+
+    def update_chunks_refering_to(self, plain_path):
+        pass
+
 
 class ConsistenceStorage(object):
     '''
@@ -699,7 +623,7 @@ class ConsistenceStorage(object):
         self.log = logging.getLogger('cozyfs')
 
     def db_execute(self, query, params=None):
-        self.log.debug(query + ' ' + str(params))
+        self.log.debug(query + ' % ' + str(params))
         if params is None:
             return self.db.execute(query)
         else:
@@ -709,12 +633,15 @@ class ConsistenceStorage(object):
         return open(self.real_path(filename), mode)
 
     def copy_file(self, source, dest):
+        self.log.debug(self.real_path(source) + ' -> ' + self.real_path(dest))
         shutil.copy(self.real_path(source), self.real_path(dest))
 
     def move_file(self, source, dest):
+        self.log.debug(self.real_path(source) + ' -> ' + self.real_path(dest))
         shutil.move(self.real_path(source), self.real_path(dest))
 
     def remove_file(self, filename):
+        self.log.debug(self.real_path(filename))
         os.remove(self.real_path(filename))
 
     def chmod_file(self, path, mode):
@@ -765,8 +692,8 @@ class CozyFS(fuse.Fuse):
         self.__init_base_versions(self.version)
 
         self.inodes = InodesRepository(self.storage, self.versions, self.backup_id)
-        self.nodes = NodesRepository(self.storage, self.versions, self.backup_id, self.inodes)
-        self.file_diff_dependencies = FileDiffDependencies(self.storage)
+        self.nodes = NodesRepository(self.storage, self.versions, self.backup_id)
+        self.chunks = ChunkRepository(self.storage)
 
     def __init_version(self, version):
         if version is None:
@@ -815,7 +742,9 @@ class CozyFS(fuse.Fuse):
         node = self.nodes.node_from_path(path)
         if node == None:
             return - errno.ENOENT
-        return self.__stat_from_attribute(node.inode.attributes)
+        inode = self.inodes.inode_from_inode_number(node.inode_number)
+        attributes = inode.attributes
+        return self.__stat_from_attribute(attributes)
 
     def __stat_from_attribute(self, attributes):
         st = Stat()
@@ -885,17 +814,19 @@ class CozyFS(fuse.Fuse):
             e.errno = errno.EROFS
             raise e
 
-    def __mknod_or_dir(self, path, mode, type, data_id=None):
+    def __mknod_or_dir(self, path, mode, type, hash=None):
         self.log.debug("PARAMS: path = '%s, mode = %s, dev = %s", path, mode, type)
 
         ctime = time.time()
 
-        inode = Inode(type=type, mode=mode, size=0,
+        inode = Inode(inode_number=None, type=type, mode=mode, size=0,
                       uid=self.GetContext()['uid'], gid=self.GetContext()['gid'],
                       atime=ctime, mtime=ctime, ctime=ctime,
-                      data_id=data_id)
+                      data=hash)
+        self.inodes.insert(inode)
 
-        self.nodes.insert(Node(path, inode))
+        node = Node(path, inode.inode_number)
+        self.nodes.insert(node)
 
         self.storage.commit()
         return 0
@@ -912,8 +843,8 @@ class CozyFS(fuse.Fuse):
 #        empty_file_path = path_join(self.device_dir, 'FilePool', MD5SUM_FOR_EMPTY_STRING)
 #        if not os.path.exists(empty_file_path):
 #            os.mknod(empty_file_path)
-        data_id = self.file_diff_dependencies.insert(MD5SUM_FOR_EMPTY_STRING, None, path.lstrip('/'))
-        return self.__mknod_or_dir(path, mode, FILE, data_id)
+        self.chunks.insert(Chunk(MD5SUM_FOR_EMPTY_STRING, None, path.lstrip('/'), 0))
+        return self.__mknod_or_dir(path, mode, FILE, MD5SUM_FOR_EMPTY_STRING)
 
     def mkdir(self, path, mode):
         self.log.debug("PARAMS: path = '%s', mode = %s", path, mode)
@@ -928,7 +859,7 @@ class CozyFS(fuse.Fuse):
         os.link(self.__plain_path(src_path), self.__plain_path(target_path))
 
         node = self.nodes.node_from_path(src_path)
-        new_node = Node(target_path, node.inode)
+        new_node = Node(target_path, node.inode_number)
         self.nodes.insert(new_node)
 
         self.storage.commit()
@@ -942,11 +873,12 @@ class CozyFS(fuse.Fuse):
 
         ctime = time.time()
 
-        inode = Inode(type=SOFT_LINK, mode=0, size=len(src_path),
+        inode = Inode(None, type=SOFT_LINK, mode=0, size=len(src_path),
                       uid=self.GetContext()['uid'], gid=self.GetContext()['gid'],
                       atime=ctime, ctime=ctime, mtime=ctime,
-                      data_id=src_path)
-        new_node = Node(target_path, inode)
+                      data=src_path)
+        self.inodes.insert(inode)
+        new_node = Node(target_path, inode.inode_number)
         self.nodes.insert(new_node)
 
         self.storage.commit()
@@ -955,8 +887,9 @@ class CozyFS(fuse.Fuse):
     def readlink(self, path):
         self.log.debug("PARAMS: path = '%s'", path)
         node = self.nodes.node_from_path(path)
-        self.log.debug("RETURNING: path = '%s'", node.inode['data_id'])
-        return node.inode['data_id']
+        inode = self.inodes.inode_from_inode_number(node.inode_number)
+        self.log.debug("RETURNING: path = '%s'", inode['data'])
+        return inode['data']
 
 
     def rename(self, old_path, new_path):
@@ -968,15 +901,16 @@ class CozyFS(fuse.Fuse):
         new_parent_node = self.nodes.node_from_path(path_dirname(new_path))
 
         os.rename(self.__plain_path(old_path), self.__plain_path(new_path))
-        self.file_diff_dependencies.update_data_path(node.inode['data_id'], new_path.lstrip('/'))
+        inode = self.inodes.inode_from_inode_number(node.inode_number)
+        self.chunks.update_plain_path(inode['data'], new_path.lstrip('/'))
 
         node.parent_node_id = new_parent_node.node_id
         node.path = new_path
-        ctime = time.time()
-        node.inode['atime'] = ctime
-        node.inode['mtime'] = ctime
 
-        self.nodes.rename(node, old_path)
+        self.nodes.update_node(node, old_path)
+
+        ctime = time.time()
+        self.inodes.update_inode_in_place(node.inode_number, {'atime': ctime, 'mtime':ctime})
 
         self.storage.commit()
         return 0
@@ -984,32 +918,52 @@ class CozyFS(fuse.Fuse):
     def unlink(self, path):
         self.log.debug("PARAMS: path = '%s'", path)
         self.__assert_readwrite()
+#        os.unlink(self.__plain_path(path))
         node = self.nodes.node_from_path(path)
-        inode = node.inode
-        data_id = inode['data_id']
-        self.nodes.remove(path)
+        inode = self.inodes.inode_from_inode_number(node.inode_number)
+        hash = inode['data']
+        self.__unlink_or_rmdir(path)
 
         node_id = self.nodes.some_node_id_from_inode_number_not_equal_node_id(inode.inode_number, node.node_id)
         if node_id is not None: # this is the hardlink handling.
             data_path = self.nodes.data_path_from_node_id(node_id)
             if data_path is not None:
                 self.log.debug('path "' + path + '" will be replaced by "' + data_path + '"')
-                self.file_diff_dependencies.update_data_path(data_id, data_path)
+                self.chunks.update_plain_path(hash, data_path)
             os.unlink(self.__plain_path(path))
-        else: # no hardlink to same file exists. Still we must handle file_diff_dependencies
-            data_path = self.file_diff_dependencies.entry_from_data_id(data_id).data_path
-            self.file_diff_dependencies.remove_and_handle_data_path(inode['data_id'])
-            self.storage.remove_file(PlainPath(data_path))
+#        else: # no hardlink to same file exists. Still we must handle chunks
+#            data_path = self.chunks.chunk_from_hash(hash).plain_path
+#            self.chunks.remove_and_handle_data_path(inode['data'])
+#            self.storage.remove_file(PlainPath(data_path))
 
         self.storage.commit()
         return 0
 
+    def __unlink_or_rmdir(self, path):
+        node = self.nodes.node_from_path(path)
+        inode = self.inodes.inode_from_inode_number(node.inode_number)
+        data_id = inode['data']
+        if self.nodes.node_has_base_nodes(node.node_id):
+            old_path = node.path
+            node.path = ''
+            node.parent_node_id = 0
+            self.nodes.update_node(node, old_path)
+        else:
+            self.nodes.delete_node(node)
+            if self.nodes.inode_not_used_anymore(inode):
+                file_system_object_type = inode["type"]
+                self.inodes.delete_inode(inode.inode_number)
+                if file_system_object_type == FILE:
+                    self.__remove_data_path_recursively(data_id)
+
+        return 0
+
     def __remove_data_path_recursively(self, data_id):
-#        file_diff_entry = self.file_diff_dependencies.entry_from_data_id(data_id)
-#        while self.inodes.data_id_not_used_anymore(data_id) and self.file_diff_dependencies.no_hash_dependent_anymore_on(file_diff_entry.hash):
-#            previous_data_path = self.file_diff_dependencies.base_of(data_path)
+#        file_diff_entry = self.chunks.entry_from_data_id(data_id)
+#        while self.inodes.data_id_not_used_anymore(data_id) and self.chunks.no_hash_dependent_anymore_on(file_diff_entry.hash):
+#            previous_data_path = self.chunks.base_of(data_path)
 #            self.storage.remove('perm/' + data_path)
-#            self.file_diff_dependencies.delete_element(data_path)
+#            self.chunks.delete_element(data_path)
 #            data_path = previous_data_path
 #            if data_path is None:
 #                break
@@ -1019,29 +973,63 @@ class CozyFS(fuse.Fuse):
         self.log.debug("PARAMS: path = '%s'", path)
         self.__assert_readwrite()
         os.rmdir(self.__plain_path(path))
-        self.nodes.remove(path)
+        self.__unlink_or_rmdir(path)
         self.storage.commit()
         return 0
-
 
     def open(self, path, flags):
         self.log.debug("PARAMS: path = '%s', flags = %s", path, flags2string(flags))
         node = self.nodes.node_from_path(path)
-        inode = node.inode
-# FIXME: ATTENTION: it's incredibly ugly, that entry_from_data_id returns something different in the 2 if-paths.
-# it's because FlushingStrategyFactory changes filediffdeps
+        inode = self.inodes.inode_from_inode_number(node.inode_number)
         if flags & os.O_WRONLY or flags & os.O_RDWR:
             self.__assert_readwrite()
-            file_content_strategy = FlushingStrategyFactory(self.nodes, self.inodes, self.storage,
-                                                               self.file_diff_dependencies).createFlushingStrategy(node)
-            file_diff_entry = self.file_diff_dependencies.entry_from_data_id(inode['data_id'])
+
+            hash = inode['data']
+            if not self.inodes.attribute_exists_in_current_version(node.inode_number, 'data'):
+                if flags & os.O_WRONLY:
+                    self.__copy_from_plain_to_perm(path, hash)
+                    self.inodes.update_inode_in_place(node.inode_number, {'data': MD5SUM_FOR_EMPTY_STRING})
+                    self.chunks.insert(Chunk(MD5SUM_FOR_EMPTY_STRING, None, path.lstrip('/'), 0))
+                elif flags & os.O_RDWR:
+                    self.inodes.update_inode_in_place(node.inode_number, {'data': hash})
+                    self.chunks.insert(Chunk(hash, None, PlainPath(path.lstrip('/')), inode['size']))
+                    self.storage.copy_file(PlainPath(path.lstrip('/')), PermanentPath(hash))
+
+            if self.inodes.attribute_has_previous_versions(node.inode_number, 'data'):
+                tmp_path = TemporaryPath(hash, self.storage)
+                previous_inode = self.inodes.inode_of_previous_version_from_inode_number(node.inode_number)
+                Patcher(self.storage).apply_patches_and_save_as(dependency_chain(self.chunks, previous_inode['data']), tmp_path)
+            else:
+                tmp_path = None
+                previous_inode = None
+
+            plain_path = PlainPath(path.lstrip('/'))
             if flags & os.O_WRONLY:
-                return OpenFileInWriteMode(self.storage, file_diff_entry.data_id, file_content_strategy, self.file_diff_dependencies)
+                return OpenFileInWriteMode(self.storage, self.chunks, plain_path, tmp_path, previous_inode)
             elif flags & os.O_RDWR:
-                return OpenFileInReadWriteMode(self.storage, file_diff_entry.data_id, file_content_strategy, self.file_diff_dependencies)
+                assert False
+#                return OpenFileInReadWriteMode(self.storage, plain_path, tmp_path)
         else: # apparently there is nothing like a "read" flag
-            file_diff_entry = self.file_diff_dependencies.entry_from_data_id(inode['data_id'])
-            return OpenFileInReadMode(self.storage, file_diff_entry.data_id, self.file_diff_dependencies)
+            hash = inode['data']
+            if is_based_on_other_hash(self.chunks, hash):
+                working_data_path = TemporaryPath(hash + '.' + str(uuid4()), self.storage)
+                Patcher(self.storage).apply_patches_and_save_as(dependency_chain(self.chunks, hash), working_data_path)
+            else:
+                chunk = self.chunks.chunk_from_hash(hash)
+                if chunk.plain_path is None:
+                    working_data_path = PermanentPath(chunk.hash)
+                else:
+                    working_data_path = PlainPath(chunk.plain_path)
+
+            return OpenFileInReadMode(self.storage, working_data_path)
+
+    def __copy_from_plain_to_perm(self, plain_path, hash):
+        if not os.path.exists(self.storage.real_path(PermanentPath(hash))):
+            self.chunks.clear_plain_path(plain_path.lstrip('/'))
+            self.storage.copy_file(PlainPath(plain_path.lstrip('/')), PermanentPath(hash))
+        else:
+            self.chunks.remove_chunk_by_plain_path(plain_path.lstrip('/'))
+
 
     def read(self, path, length, offset, fH):
         buf = fH.read(length, offset)
@@ -1054,15 +1042,14 @@ class CozyFS(fuse.Fuse):
     def flush(self, path, fh):
         self.log.debug("PARAMS: path = '%s', fH = %s", path, fh)
         try:
-            if (isinstance(fh, OpenFileInReadWriteMode) or isinstance(fh, OpenFileInWriteMode)):
+            if (#isinstance(fh, OpenFileInReadWriteMode) or 
+                isinstance(fh, OpenFileInWriteMode)):
                 node = self.nodes.node_from_path(path)
-                file_diff_entry = self.file_diff_dependencies.entry_from_data_id(node.inode['data_id'])
-                old_size = file_diff_entry.size
-                new_size = fh.flush()
-                if old_size != new_size:
-                    self.inodes.update_inode_in_place(node.inode.inode_number, {'size': new_size})
+                inode = self.inodes.inode_from_inode_number(node.inode_number)
+                new_size, new_hash = fh.flush()
+                if new_hash != inode['data']:
+                    self.inodes.update_inode_in_place(node.inode_number, {'size': new_size, 'data': new_hash})
 #                    self.__remove_data_path_recursively(old_data_path)
-        # FIXME: shouldn't this be indented?
             self.storage.commit()
         except Exception, e:
             traceback.print_exc(file=sys.stderr)
@@ -1083,10 +1070,10 @@ class CozyFS(fuse.Fuse):
         self.__assert_readwrite()
 
         # FIXME: not sure if implementing truncate through open, write, flush release sequence is good. 
-        file_handle = self.open(path, os.O_RDWR)
-        file_handle.file_handle.truncate(length)
-        self.flush(path, file_handle)
-        self.release(path, 0, file_handle)
+#        file_handle = self.open(path, os.O_WRONLY)
+#        file_handle.file_handle.truncate(length)
+#        self.flush(path, file_handle)
+#        self.release(path, 0, file_handle)
         return 0
 
 
@@ -1108,7 +1095,7 @@ class CozyFS(fuse.Fuse):
     def __update_attributes(self, path, attributes):
         self.__assert_readwrite()
         node = self.nodes.node_from_path(path)
-        self.inodes.update_inode_in_place(node.inode.inode_number, attributes)
+        self.inodes.update_inode_in_place(node.inode_number, attributes)
         self.storage.commit()
         return 0
 
@@ -1137,7 +1124,7 @@ def connect_to_database(db_filename):
         exit(3)
 
 
-def initLogger():
+def init_logger():
     log = logging.getLogger('cozyfs')
     log.setLevel(logging.DEBUG)
 
@@ -1150,6 +1137,7 @@ def initLogger():
     debug_handler.setFormatter(formatter)
     debug_handler.setLevel(logging.DEBUG)
     log.addHandler(debug_handler)
+
 
 class InputParameters:
     pass
@@ -1183,11 +1171,11 @@ def pydevBrk():
         except ImportError:
             print "cannot connect"
 
-def main(argv):
+def main(argv=sys.argv[1:]):
 #    pydevBrk()
     input_params = parse_commandline(argv)
 
-    initLogger()
+    init_logger()
     db = connect_to_database(path_join(input_params.device_dir, DBFILE))
     storage = ConsistenceStorage(db, input_params.device_dir)
 
@@ -1202,4 +1190,4 @@ def main(argv):
 
 if __name__ == '__main__':
 #    cProfile.run('mount()', 'cozyfs-profile-output')
-    main(sys.argv[1:])
+    main()
